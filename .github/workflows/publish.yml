@@ -24,6 +24,3 @@ jobs:
       - name: Check tag matches package version
         run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
       - run: npm publish
-        env:
-          # Bootstrap only. Remove after the trusted publisher validates.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
