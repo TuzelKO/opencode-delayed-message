@@ -87,18 +87,13 @@ export default Plugin.define({
       },
       cancel: async (input) => {
         const { sessionID, id } = input as { sessionID: string; id: string }
-        if (claimed.has(id) || delivering.has(id)) return { ok: false }
-        const stored = (await ctx.storage.get(key(id))) as Job | undefined
-        if (!stored || stored.sessionID !== sessionID) return { ok: false }
-        claimed.add(id)
-        const timer = timers.get(id)
-        if (timer) {
-          clearTimeout(timer)
-          timers.delete(id)
-        }
-        await ctx.storage.remove(key(id))
-        await rpc.events.emit("cancelled", { sessionID, id }).catch(() => {})
-        return { ok: true }
+        return { ok: (await withdraw(sessionID, id)) !== undefined }
+      },
+      edit: async (input) => {
+        const { sessionID, id } = input as { sessionID: string; id: string }
+        const job = await withdraw(sessionID, id)
+        if (!job) return { ok: false }
+        return { ok: true, text: job.message, fireAt: job.fireAt }
       },
       deliver: async (input) => {
         const { sessionID, id } = input as { sessionID: string; id: string }
@@ -109,6 +104,21 @@ export default Plugin.define({
         return { status: await deliver(stored) }
       },
     })
+
+    const withdraw = async (sessionID: string, id: string): Promise<Job | undefined> => {
+      if (claimed.has(id) || delivering.has(id)) return undefined
+      const stored = (await ctx.storage.get(key(id))) as Job | undefined
+      if (!stored || stored.sessionID !== sessionID) return undefined
+      claimed.add(id)
+      const timer = timers.get(id)
+      if (timer) {
+        clearTimeout(timer)
+        timers.delete(id)
+      }
+      await ctx.storage.remove(key(id))
+      await rpc.events.emit("cancelled", { sessionID, id }).catch(() => {})
+      return stored
+    }
 
     const deliver = async (job: Job): Promise<Delivery> => {
       if (claimed.has(job.id)) return "delivered"

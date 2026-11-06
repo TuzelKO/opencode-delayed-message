@@ -85,9 +85,13 @@ Above the composer, while a message is pending:
 ⏰ Scheduled · 10:18
 ```
 
-Click it for the list: time, relative countdown, a preview of the text, and `×` to cancel.
-The pill disappears when the message is delivered or cancelled. The terminal UI has no pill —
-there the transcript note is the only trace.
+Click it for the list: time, relative countdown, a preview of the text, and `✎` to edit
+or `×` to cancel. Edit cancels the pending job and puts the whole command back into the
+composer — `/delayed-message`, the scheduled time, and the full text — with the cursor in
+the prompt. Adjust anything and submit to reschedule. The pill disappears when the
+message is delivered or cancelled.
+
+The terminal UI has no pill — there the transcript note is the only trace.
 
 The pill follows the app language: English, Russian, German, French, and Chinese are
 included. Transcript notes are English, because they are written for the model.
@@ -113,8 +117,8 @@ waits for the next time that directory loads.
   24.8-day timer cap.
 - On fire: `ctx.session.prompt({ sessionID, text })` — a real user prompt, so the session
   wakes.
-- The GUI talks to the server through an RPC: `pending`, `cancel`, `deliver`, and the
-  events `scheduled`, `fired`, `cancelled`.
+- The GUI talks to the server through an RPC: `pending`, `cancel`, `edit`, `deliver`, and
+  the events `scheduled`, `fired`, `cancelled`.
 - The GUI main process mirrors `scheduled` jobs into its own storage and arms Node timers.
   When one is due it calls `deliver` with the job's directory, which boots the location
   and delivers the message even though the server-side timer is gone.

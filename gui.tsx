@@ -7,6 +7,17 @@ type Job = { id: string; fireAt: number; preview: string }
 
 const MaxTimer = 2 ** 31 - 1
 
+const pad = (value: number) => String(value).padStart(2, "0")
+
+// Local wall-clock time in the command's ISO form, seconds only when they are
+// not zero so a relative schedule keeps its exact target.
+const draftTime = (at: number) => {
+  const date = new Date(at)
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  return date.getSeconds() === 0 ? `${day}T${time}` : `${day}T${time}:${pad(date.getSeconds())}`
+}
+
 const css = `
 .dm { display: flex; flex-direction: column; min-width: 280px; max-width: 440px; }
 .dm-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; }
@@ -15,9 +26,8 @@ const css = `
 .dm-when { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
 .dm-left { opacity: .55; font-size: 12px; white-space: nowrap; }
 .dm-text { opacity: .72; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dm-x { flex: none; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .45; cursor: pointer; font: inherit; line-height: 1; }
-.dm-x:hover { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }
-`
+.dm-action { flex: none; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .45; cursor: pointer; font: inherit; line-height: 1; }
+.dm-action:hover { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }`
 
 export default Plugin.define({
   i18n: {
@@ -26,6 +36,7 @@ export default Plugin.define({
       "pill.many": "Scheduled: {{count}}",
       "menu.title": "Scheduled messages",
       "row.cancel": "Cancel",
+      "row.edit": "Edit",
       "left.now": "now",
       "left.days": "in {{days}}d {{hours}}h",
       "left.hours": "in {{hours}}h {{minutes}}m",
@@ -36,6 +47,7 @@ export default Plugin.define({
       "pill.many": "Отложенных: {{count}}",
       "menu.title": "Отложенные сообщения",
       "row.cancel": "Отменить",
+      "row.edit": "Изменить",
       "left.now": "сейчас",
       "left.days": "через {{days}} д {{hours}} ч",
       "left.hours": "через {{hours}} ч {{minutes}} мин",
@@ -46,6 +58,7 @@ export default Plugin.define({
       "pill.many": "Geplant: {{count}}",
       "menu.title": "Geplante Nachrichten",
       "row.cancel": "Abbrechen",
+      "row.edit": "Bearbeiten",
       "left.now": "jetzt",
       "left.days": "in {{days}} T {{hours}} Std.",
       "left.hours": "in {{hours}} Std. {{minutes}} Min.",
@@ -56,6 +69,7 @@ export default Plugin.define({
       "pill.many": "Programmés : {{count}}",
       "menu.title": "Messages programmés",
       "row.cancel": "Annuler",
+      "row.edit": "Modifier",
       "left.now": "maintenant",
       "left.days": "dans {{days}} j {{hours}} h",
       "left.hours": "dans {{hours}} h {{minutes}} min",
@@ -66,6 +80,7 @@ export default Plugin.define({
       "pill.many": "已安排：{{count}}",
       "menu.title": "已安排的消息",
       "row.cancel": "取消",
+      "row.edit": "编辑",
       "left.now": "现在",
       "left.days": "还有 {{days}} 天 {{hours}} 小时",
       "left.hours": "还有 {{hours}} 小时 {{minutes}} 分钟",
@@ -176,7 +191,26 @@ export default Plugin.define({
                   <div class="dm-text">{job.preview}</div>
                 </div>
                 <button
-                  class="dm-x"
+                  class="dm-action"
+                  title={ctx.t("row.edit")}
+                  aria-label={ctx.t("row.edit")}
+                  onClick={() => {
+                    void rpc
+                      .edit({ sessionID: props.session.id, id: job.id })
+                      .then(({ ok, text, fireAt }) => {
+                        if (!ok || text === undefined || fireAt === undefined) return
+                        drop(props.session.id, job.id)
+                        props.screen.composer.setText(`/delayed-message ${draftTime(fireAt)} ${text}`)
+                        props.close()
+                        props.screen.composer.focus()
+                      })
+                      .catch(() => {})
+                  }}
+                >
+                  ✎
+                </button>
+                <button
+                  class="dm-action"
                   title={ctx.t("row.cancel")}
                   aria-label={ctx.t("row.cancel")}
                   onClick={() => void cancel(props.session.id, job.id)}

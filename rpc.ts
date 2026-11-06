@@ -70,6 +70,29 @@ export const Delayed = Rpc.define({
         additionalProperties: false,
       },
     },
+    // Cancels the job and hands its full text back so the pill can put the
+    // command into the composer for editing.
+    edit: {
+      input: {
+        type: "object",
+        properties: {
+          sessionID: { type: "string" },
+          id: { type: "string" },
+        },
+        required: ["sessionID", "id"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          text: { type: "string" },
+          fireAt: { type: "number" },
+        },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+    },
   },
   events: {
     scheduled: {
