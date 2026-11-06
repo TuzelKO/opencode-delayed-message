@@ -82,15 +82,16 @@ Treat this as a prompt-level guarantee, not encryption.
 Above the composer, while a message is pending:
 
 ```text
-⏰ Scheduled · 10:18
+⏰ Delayed
 ```
 
-Click it for the list: one line per message with the scheduled time, a preview, and
-the countdown, like the app's own subagent list. `✎` to edit and `×` to cancel appear
-when you hover a row. Edit cancels the pending job and puts the whole command back into
-the composer — `/delayed-message`, the scheduled time, and the full text — with the
-cursor in the prompt. Adjust anything and submit to reschedule. The pill disappears
-when the message is delivered or cancelled.
+The label is constant — the list behind it carries the times and the count.
+Click it for one line per message with the scheduled time, a preview, and the
+countdown, like the app's own subagent list. `✎` to edit and `×` to cancel appear
+when you hover a row. Edit cancels the pending job and puts the whole command back
+into the composer — `/delayed-message`, the scheduled time, and the full text —
+with the cursor in the prompt. Adjust anything and submit to reschedule. The pill
+disappears when the message is delivered or cancelled.
 
 The terminal UI has no pill — there the transcript note is the only trace.
 

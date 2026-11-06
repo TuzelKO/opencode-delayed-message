@@ -20,25 +20,24 @@ const draftTime = (at: number) => {
 
 const css = `
 [data-slot="session-plugin-pill-popover"]:has(.dm) > div:first-child { display: none; }
-.dm { display: flex; flex-direction: column; gap: 1px; min-width: 280px; max-width: 440px; margin: -4px -2px; }
+.dm { display: flex; flex-direction: column; gap: 1px; }
 .dm:focus { outline: none; }
-.dm-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 13px; }
-.dm-row:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
-.dm-time { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
-.dm-text { flex: 1 1 auto; min-width: 0; opacity: .72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dm-left { flex: none; min-width: 52px; text-align: right; opacity: .5; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity .12s ease; }
+.dm-row { position: relative; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 12px; border-radius: 4px; font-size: 13px; font-weight: 440; line-height: var(--line-height-compact); letter-spacing: -.04px; }
+.dm-row:hover { background: var(--v2-overlay-simple-overlay-hover); }
+.dm-time { flex: none; font-weight: 530; font-variant-numeric: tabular-nums; }
+.dm-text { flex: 1 1 auto; min-width: 0; color: var(--v2-text-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-left { flex: none; min-width: 52px; text-align: right; color: var(--v2-text-text-muted); font-size: 11px; font-weight: 440; letter-spacing: .05px; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity .12s ease; }
 .dm-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
 .dm-row:hover .dm-left, .dm-row:has(.dm-action:focus-visible) .dm-left { opacity: 0; }
 .dm-row:hover .dm-actions, .dm-row:has(.dm-action:focus-visible) .dm-actions { opacity: 1; pointer-events: auto; }
-.dm-action { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .55; cursor: pointer; font: inherit; line-height: 1; }
-.dm-action:hover { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }
+.dm-action { flex: none; width: 22px; height: 22px; border: 0; border-radius: 4px; background: transparent; color: inherit; opacity: .55; cursor: pointer; font: inherit; line-height: 1; }
+.dm-action:hover { opacity: 1; background: var(--v2-overlay-simple-overlay-hover); }
 `
 
 export default Plugin.define({
   i18n: {
     en: {
-      "pill.one": "Scheduled · {{time}}",
-      "pill.many": "Scheduled: {{count}}",
+      "pill.label": "Delayed",
       "menu.title": "Scheduled messages",
       "row.cancel": "Cancel",
       "row.edit": "Edit",
@@ -48,8 +47,7 @@ export default Plugin.define({
       "left.minutes": "{{minutes}}m",
     },
     ru: {
-      "pill.one": "Отложенное · {{time}}",
-      "pill.many": "Отложенных: {{count}}",
+      "pill.label": "Отложенное",
       "menu.title": "Отложенные сообщения",
       "row.cancel": "Отменить",
       "row.edit": "Изменить",
@@ -59,8 +57,7 @@ export default Plugin.define({
       "left.minutes": "{{minutes}} мин",
     },
     de: {
-      "pill.one": "Geplant · {{time}}",
-      "pill.many": "Geplant: {{count}}",
+      "pill.label": "Geplant",
       "menu.title": "Geplante Nachrichten",
       "row.cancel": "Abbrechen",
       "row.edit": "Bearbeiten",
@@ -70,8 +67,7 @@ export default Plugin.define({
       "left.minutes": "{{minutes}} Min.",
     },
     fr: {
-      "pill.one": "Programmé · {{time}}",
-      "pill.many": "Programmés : {{count}}",
+      "pill.label": "Programmé",
       "menu.title": "Messages programmés",
       "row.cancel": "Annuler",
       "row.edit": "Modifier",
@@ -81,8 +77,7 @@ export default Plugin.define({
       "left.minutes": "{{minutes}} min",
     },
     zh: {
-      "pill.one": "已安排 · {{time}}",
-      "pill.many": "已安排：{{count}}",
+      "pill.label": "已安排",
       "menu.title": "已安排的消息",
       "row.cancel": "取消",
       "row.edit": "编辑",
@@ -175,10 +170,7 @@ export default Plugin.define({
         if (list.length === 0) return undefined
 
         return {
-          label:
-            list.length === 1
-              ? ctx.t("pill.one", { time: clock(list[0].fireAt) })
-              : ctx.t("pill.many", { count: list.length }),
+          label: ctx.t("pill.label"),
           icon: "notifications",
           title: ctx.t("menu.title"),
         }
