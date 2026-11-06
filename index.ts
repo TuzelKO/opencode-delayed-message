@@ -20,6 +20,10 @@ const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 8
 
 // Setup can run more than once per directory; only the first timer may deliver.
 const claimed = new Set<string>()
+// Guards concurrent deliveries of one job while the prompt is in flight.
+const delivering = new Set<string>()
+
+type Delivery = "delivered" | "busy" | "failed"
 
 const key = (id: string) => `pending/${id}`
 
@@ -83,7 +87,7 @@ export default Plugin.define({
       },
       cancel: async (input) => {
         const { sessionID, id } = input as { sessionID: string; id: string }
-        if (claimed.has(id)) return { ok: false }
+        if (claimed.has(id) || delivering.has(id)) return { ok: false }
         const stored = (await ctx.storage.get(key(id))) as Job | undefined
         if (!stored || stored.sessionID !== sessionID) return { ok: false }
         claimed.add(id)
@@ -96,21 +100,35 @@ export default Plugin.define({
         await rpc.events.emit("cancelled", { sessionID, id }).catch(() => {})
         return { ok: true }
       },
+      deliver: async (input) => {
+        const { sessionID, id } = input as { sessionID: string; id: string }
+        if (claimed.has(id)) return { status: "delivered" }
+        if (delivering.has(id)) return { status: "busy" }
+        const stored = (await ctx.storage.get(key(id))) as Job | undefined
+        if (!stored || stored.sessionID !== sessionID) return { status: "missing" }
+        return { status: await deliver(stored) }
+      },
     })
 
-    const deliver = async (job: Job) => {
-      timers.delete(job.id)
-      if (claimed.has(job.id)) return
-      claimed.add(job.id)
+    const deliver = async (job: Job): Promise<Delivery> => {
+      if (claimed.has(job.id)) return "delivered"
+      if (delivering.has(job.id)) return "busy"
+      delivering.add(job.id)
       try {
-        if (!(await ctx.storage.get(key(job.id)))) return
-        await ctx.storage.remove(key(job.id))
         await ctx.session.prompt({ sessionID: job.sessionID, text: job.message })
       } catch (error) {
         console.error(`[delayed-message] delivery failed for ${job.id}:`, error)
+        return "failed"
       } finally {
-        await rpc.events.emit("fired", { sessionID: job.sessionID, id: job.id }).catch(() => {})
+        delivering.delete(job.id)
       }
+      // Claim only after the prompt landed: a failure keeps the job in storage
+      // for the next boot or for the desktop main process to retry.
+      claimed.add(job.id)
+      timers.delete(job.id)
+      await ctx.storage.remove(key(job.id)).catch(() => {})
+      await rpc.events.emit("fired", { sessionID: job.sessionID, id: job.id }).catch(() => {})
+      return "delivered"
     }
 
     // setTimeout caps at MAX_TIMER, so long waits are split into hops.
@@ -185,6 +203,7 @@ export default Plugin.define({
               id: job.id,
               fireAt: at,
               preview: previewOf(message),
+              directory: job.directory,
             }).catch(() => {})
             await note(sessionID, `Delayed message scheduled for ${stamp(at)} (in ${humanize(at - now)}).`)
           } catch (error) {

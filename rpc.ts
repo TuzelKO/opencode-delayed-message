@@ -50,6 +50,26 @@ export const Delayed = Rpc.define({
         additionalProperties: false,
       },
     },
+    // The desktop app's main process owns a timer outside the location, so it
+    // can ask for delivery after the location that scheduled the job was
+    // evicted. Status is "delivered" | "missing" | "busy" | "failed".
+    deliver: {
+      input: {
+        type: "object",
+        properties: {
+          sessionID: { type: "string" },
+          id: { type: "string" },
+        },
+        required: ["sessionID", "id"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: { status: { type: "string" } },
+        required: ["status"],
+        additionalProperties: false,
+      },
+    },
   },
   events: {
     scheduled: {
@@ -60,8 +80,9 @@ export const Delayed = Rpc.define({
           id: { type: "string" },
           fireAt: { type: "number" },
           preview: { type: "string" },
+          directory: { type: "string" },
         },
-        required: ["sessionID", "id", "fireAt", "preview"],
+        required: ["sessionID", "id", "fireAt", "preview", "directory"],
         additionalProperties: false,
       },
     },

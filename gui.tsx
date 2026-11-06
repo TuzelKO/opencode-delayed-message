@@ -1,8 +1,11 @@
 import { createSignal, For } from "solid-js"
+import { Schema } from "effect"
 import { ComposerPill, createKeyed, Plugin, Style } from "@opencode/plugin/gui"
 import { Delayed } from "./rpc"
 
 type Job = { id: string; fireAt: number; preview: string }
+
+const MaxTimer = 2 ** 31 - 1
 
 const css = `
 .dm { display: flex; flex-direction: column; min-width: 280px; max-width: 440px; }
@@ -185,6 +188,113 @@ export default Plugin.define({
           </For>
         </div>
       ),
+    })
+  },
+  // The server timer lives in a location service, and an idle location is
+  // evicted after 60 minutes; its cleanup takes every pending timer with it.
+  // The desktop app's main process outlives locations, so it keeps the clock
+  // and asks the location to deliver when the time comes.
+  main(ctx) {
+    const PendingSchema = Schema.Struct({
+      id: Schema.String,
+      sessionID: Schema.String,
+      directory: Schema.String,
+      fireAt: Schema.Number,
+    })
+    type PendingJob = typeof PendingSchema.Type
+
+    const jobs = ctx.storage.store("pending", { schema: Schema.Array(PendingSchema), initial: [] })
+    const timers = new Map<string, ReturnType<typeof setTimeout>>()
+    const failures = new Map<string, number>()
+
+    const stop = (id: string) => {
+      const timer = timers.get(id)
+      if (timer) clearTimeout(timer)
+      timers.delete(id)
+    }
+
+    const forget = (id: string) => {
+      stop(id)
+      failures.delete(id)
+      if (jobs.value.some((job) => job.id === id)) jobs.set(jobs.value.filter((job) => job.id !== id))
+    }
+
+    const arm = (job: PendingJob) => {
+      stop(job.id)
+      const delay = job.fireAt - Date.now()
+      if (delay > MaxTimer - 1) {
+        timers.set(job.id, setTimeout(() => arm(job), MaxTimer - 1))
+        return
+      }
+      timers.set(job.id, setTimeout(() => void fire(job), Math.max(0, delay)))
+    }
+
+    const fire = async (job: PendingJob) => {
+      stop(job.id)
+      if (Date.now() < job.fireAt) {
+        arm(job)
+        return
+      }
+      try {
+        const { status } = await ctx.client.rpc(Delayed).deliver(
+          { sessionID: job.sessionID, id: job.id },
+          { location: { directory: job.directory } },
+        )
+        if (status === "delivered" || status === "missing") {
+          failures.delete(job.id)
+          forget(job.id)
+          return
+        }
+        if (status === "failed") {
+          const count = (failures.get(job.id) ?? 0) + 1
+          if (count >= 5) {
+            failures.delete(job.id)
+            forget(job.id)
+            return
+          }
+          failures.set(job.id, count)
+        }
+        timers.set(job.id, setTimeout(() => void fire(job), status === "busy" ? 2_000 : 30_000))
+      } catch {
+        timers.set(job.id, setTimeout(() => void fire(job), 15_000))
+      }
+    }
+
+    const upsert = (job: PendingJob) => {
+      jobs.set([...jobs.value.filter((item) => item.id !== job.id), job])
+      arm(job)
+    }
+
+    const handle = (event: { type: string; data?: unknown }) => {
+      if (event.type === "rpc.delayed-message.scheduled") {
+        const data = event.data as
+          | { id?: string; sessionID?: string; fireAt?: number; directory?: string }
+          | undefined
+        if (!data?.id || !data.sessionID || !data.fireAt || !data.directory) return
+        upsert({ id: data.id, sessionID: data.sessionID, directory: data.directory, fireAt: data.fireAt })
+        return
+      }
+      if (event.type === "rpc.delayed-message.fired" || event.type === "rpc.delayed-message.cancelled") {
+        const data = event.data as { id?: string } | undefined
+        if (data?.id) forget(data.id)
+      }
+    }
+
+    for (const job of jobs.value) arm(job)
+
+    void (async () => {
+      while (!ctx.signal.aborted) {
+        try {
+          for await (const event of ctx.client.event.subscribe({ signal: ctx.signal })) handle(event)
+        } catch {}
+        if (ctx.signal.aborted) break
+        await new Promise((resolve) => setTimeout(resolve, 3_000))
+      }
+    })()
+
+    ctx.onCleanup(() => {
+      for (const timer of timers.values()) clearTimeout(timer)
+      timers.clear()
     })
   },
 })

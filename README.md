@@ -28,6 +28,8 @@ the text into the conversation early.
 - 💾 **Durable** — jobs survive a service restart; timers re-arm from storage.
 - 🪟 **Desktop pill** — pending count and time above the composer, with a preview and a
   cancel button.
+- ⏱️ **On time in the desktop app** — the app's main process keeps the clock, so an idle
+  window or an evicted location does not delay delivery.
 - 🤫 **Zero model turns on schedule** — a successful schedule does not wake the model.
 - 🌍 **Localized UI** — English, Russian, German, French, Chinese.
 
@@ -96,6 +98,13 @@ Jobs are kept in the plugin's storage, not only in memory. After `opencode reloa
 service restart, timers are re-armed when the plugin loads for that directory. If the
 service is down at the scheduled moment, the message is delivered on the next start.
 
+OpenCode unloads a directory's services after 60 minutes without activity (the
+`experimental.location_idle_timeout` setting), and plugin timers die with them. In the
+desktop app that no longer delays a message: the app's main process keeps its own timer,
+persists it across app restarts, and asks the server to deliver at the scheduled moment,
+which wakes the directory if it was unloaded. Without the desktop app, delivery still
+waits for the next time that directory loads.
+
 ## 🧠 How it works
 
 - `ctx.command.transform` registers `/delayed-message`; the executor gets the raw text
@@ -104,8 +113,11 @@ service is down at the scheduled moment, the message is delivered on the next st
   24.8-day timer cap.
 - On fire: `ctx.session.prompt({ sessionID, text })` — a real user prompt, so the session
   wakes.
-- The GUI talks to the server through an RPC: `pending`, `cancel`, and the events
-  `scheduled`, `fired`, `cancelled`.
+- The GUI talks to the server through an RPC: `pending`, `cancel`, `deliver`, and the
+  events `scheduled`, `fired`, `cancelled`.
+- The GUI main process mirrors `scheduled` jobs into its own storage and arms Node timers.
+  When one is due it calls `deliver` with the job's directory, which boots the location
+  and delivers the message even though the server-side timer is gone.
 
 ## 🛠 Development
 
