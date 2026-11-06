@@ -85,11 +85,12 @@ Above the composer, while a message is pending:
 ⏰ Scheduled · 10:18
 ```
 
-Click it for the list: time, relative countdown, a preview of the text, and `✎` to edit
-or `×` to cancel. Edit cancels the pending job and puts the whole command back into the
-composer — `/delayed-message`, the scheduled time, and the full text — with the cursor in
-the prompt. Adjust anything and submit to reschedule. The pill disappears when the
-message is delivered or cancelled.
+Click it for the list: one line per message with the scheduled time, a preview, and
+the countdown, like the app's own subagent list. `✎` to edit and `×` to cancel appear
+when you hover a row. Edit cancels the pending job and puts the whole command back into
+the composer — `/delayed-message`, the scheduled time, and the full text — with the
+cursor in the prompt. Adjust anything and submit to reschedule. The pill disappears
+when the message is delivered or cancelled.
 
 The terminal UI has no pill — there the transcript note is the only trace.
 

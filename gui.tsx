@@ -19,15 +19,18 @@ const draftTime = (at: number) => {
 }
 
 const css = `
-.dm { display: flex; flex-direction: column; min-width: 280px; max-width: 440px; }
-.dm-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; }
-.dm-row + .dm-row { border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
-.dm-body { flex: 1; min-width: 0; }
-.dm-when { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
-.dm-left { opacity: .55; font-size: 12px; white-space: nowrap; }
-.dm-text { opacity: .72; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dm-action { flex: none; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .45; cursor: pointer; font: inherit; line-height: 1; }
-.dm-action:hover { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }`
+.dm { display: flex; flex-direction: column; gap: 1px; min-width: 280px; max-width: 440px; margin: -4px -6px; }
+.dm-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 13px; }
+.dm-row:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+.dm-time { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+.dm-text { flex: 1 1 auto; min-width: 0; opacity: .72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-left { flex: none; min-width: 52px; text-align: right; opacity: .5; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity .12s ease; }
+.dm-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.dm-row:hover .dm-left, .dm-row:focus-within .dm-left { opacity: 0; }
+.dm-row:hover .dm-actions, .dm-row:focus-within .dm-actions { opacity: 1; pointer-events: auto; }
+.dm-action { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .55; cursor: pointer; font: inherit; line-height: 1; }
+.dm-action:hover { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }
+`
 
 export default Plugin.define({
   i18n: {
@@ -38,9 +41,9 @@ export default Plugin.define({
       "row.cancel": "Cancel",
       "row.edit": "Edit",
       "left.now": "now",
-      "left.days": "in {{days}}d {{hours}}h",
-      "left.hours": "in {{hours}}h {{minutes}}m",
-      "left.minutes": "in {{minutes}}m",
+      "left.days": "{{days}}d {{hours}}h",
+      "left.hours": "{{hours}}h {{minutes}}m",
+      "left.minutes": "{{minutes}}m",
     },
     ru: {
       "pill.one": "Отложенное · {{time}}",
@@ -49,9 +52,9 @@ export default Plugin.define({
       "row.cancel": "Отменить",
       "row.edit": "Изменить",
       "left.now": "сейчас",
-      "left.days": "через {{days}} д {{hours}} ч",
-      "left.hours": "через {{hours}} ч {{minutes}} мин",
-      "left.minutes": "через {{minutes}} мин",
+      "left.days": "{{days}} д {{hours}} ч",
+      "left.hours": "{{hours}} ч {{minutes}} мин",
+      "left.minutes": "{{minutes}} мин",
     },
     de: {
       "pill.one": "Geplant · {{time}}",
@@ -60,9 +63,9 @@ export default Plugin.define({
       "row.cancel": "Abbrechen",
       "row.edit": "Bearbeiten",
       "left.now": "jetzt",
-      "left.days": "in {{days}} T {{hours}} Std.",
-      "left.hours": "in {{hours}} Std. {{minutes}} Min.",
-      "left.minutes": "in {{minutes}} Min.",
+      "left.days": "{{days}} T {{hours}} Std.",
+      "left.hours": "{{hours}} Std. {{minutes}} Min.",
+      "left.minutes": "{{minutes}} Min.",
     },
     fr: {
       "pill.one": "Programmé · {{time}}",
@@ -71,9 +74,9 @@ export default Plugin.define({
       "row.cancel": "Annuler",
       "row.edit": "Modifier",
       "left.now": "maintenant",
-      "left.days": "dans {{days}} j {{hours}} h",
-      "left.hours": "dans {{hours}} h {{minutes}} min",
-      "left.minutes": "dans {{minutes}} min",
+      "left.days": "{{days}} j {{hours}} h",
+      "left.hours": "{{hours}} h {{minutes}} min",
+      "left.minutes": "{{minutes}} min",
     },
     zh: {
       "pill.one": "已安排 · {{time}}",
@@ -82,9 +85,9 @@ export default Plugin.define({
       "row.cancel": "取消",
       "row.edit": "编辑",
       "left.now": "现在",
-      "left.days": "还有 {{days}} 天 {{hours}} 小时",
-      "left.hours": "还有 {{hours}} 小时 {{minutes}} 分钟",
-      "left.minutes": "还有 {{minutes}} 分钟",
+      "left.days": "{{days}} 天 {{hours}} 小时",
+      "left.hours": "{{hours}} 小时 {{minutes}} 分钟",
+      "left.minutes": "{{minutes}} 分钟",
     },
   },
   setup(ctx) {
@@ -183,40 +186,38 @@ export default Plugin.define({
           <For each={jobs()[props.session.id] ?? []}>
             {(job) => (
               <div class="dm-row">
-                <div class="dm-body">
-                  <div class="dm-when">
-                    <span>{when(job.fireAt)}</span>
-                    <span class="dm-left">{left(job.fireAt)}</span>
-                  </div>
-                  <div class="dm-text">{job.preview}</div>
-                </div>
-                <button
-                  class="dm-action"
-                  title={ctx.t("row.edit")}
-                  aria-label={ctx.t("row.edit")}
-                  onClick={() => {
-                    void rpc
-                      .edit({ sessionID: props.session.id, id: job.id })
-                      .then(({ ok, text, fireAt }) => {
-                        if (!ok || text === undefined || fireAt === undefined) return
-                        drop(props.session.id, job.id)
-                        props.screen.composer.setText(`/delayed-message ${draftTime(fireAt)} ${text}`)
-                        props.close()
-                        props.screen.composer.focus()
-                      })
-                      .catch(() => {})
-                  }}
-                >
-                  ✎
-                </button>
-                <button
-                  class="dm-action"
-                  title={ctx.t("row.cancel")}
-                  aria-label={ctx.t("row.cancel")}
-                  onClick={() => void cancel(props.session.id, job.id)}
-                >
-                  ×
-                </button>
+                <span class="dm-time">{when(job.fireAt)}</span>
+                <span class="dm-text">{job.preview}</span>
+                <span class="dm-left">{left(job.fireAt)}</span>
+                <span class="dm-actions">
+                  <button
+                    class="dm-action"
+                    title={ctx.t("row.edit")}
+                    aria-label={ctx.t("row.edit")}
+                    onClick={() => {
+                      void rpc
+                        .edit({ sessionID: props.session.id, id: job.id })
+                        .then(({ ok, text, fireAt }) => {
+                          if (!ok || text === undefined || fireAt === undefined) return
+                          drop(props.session.id, job.id)
+                          props.screen.composer.setText(`/delayed-message ${draftTime(fireAt)} ${text}`)
+                          props.close()
+                          props.screen.composer.focus()
+                        })
+                        .catch(() => {})
+                    }}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    class="dm-action"
+                    title={ctx.t("row.cancel")}
+                    aria-label={ctx.t("row.cancel")}
+                    onClick={() => void cancel(props.session.id, job.id)}
+                  >
+                    ×
+                  </button>
+                </span>
               </div>
             )}
           </For>
