@@ -37,7 +37,8 @@ const css = `
 export default Plugin.define({
   i18n: {
     en: {
-      "pill.label": "Delayed",
+      "pill.count.one": "{{count}} delayed",
+      "pill.count.other": "{{count}} delayed",
       "menu.title": "Scheduled messages",
       "row.cancel": "Cancel",
       "row.edit": "Edit",
@@ -47,7 +48,8 @@ export default Plugin.define({
       "left.minutes": "{{minutes}}m",
     },
     ru: {
-      "pill.label": "Отложенное",
+      "pill.count.one": "{{count}} отложено",
+      "pill.count.other": "{{count}} отложено",
       "menu.title": "Отложенные сообщения",
       "row.cancel": "Отменить",
       "row.edit": "Изменить",
@@ -57,7 +59,8 @@ export default Plugin.define({
       "left.minutes": "{{minutes}} мин",
     },
     de: {
-      "pill.label": "Geplant",
+      "pill.count.one": "{{count}} geplant",
+      "pill.count.other": "{{count}} geplant",
       "menu.title": "Geplante Nachrichten",
       "row.cancel": "Abbrechen",
       "row.edit": "Bearbeiten",
@@ -67,7 +70,8 @@ export default Plugin.define({
       "left.minutes": "{{minutes}} Min.",
     },
     fr: {
-      "pill.label": "Programmé",
+      "pill.count.one": "{{count}} programmé",
+      "pill.count.other": "{{count}} programmés",
       "menu.title": "Messages programmés",
       "row.cancel": "Annuler",
       "row.edit": "Modifier",
@@ -77,7 +81,8 @@ export default Plugin.define({
       "left.minutes": "{{minutes}} min",
     },
     zh: {
-      "pill.label": "已安排",
+      "pill.count.one": "{{count}} 个已安排",
+      "pill.count.other": "{{count}} 个已安排",
       "menu.title": "已安排的消息",
       "row.cancel": "取消",
       "row.edit": "编辑",
@@ -170,7 +175,7 @@ export default Plugin.define({
         if (list.length === 0) return undefined
 
         return {
-          label: ctx.t("pill.label"),
+          label: ctx.plural("pill.count", list.length),
           icon: "notifications",
           title: ctx.t("menu.title"),
         }
@@ -194,7 +199,7 @@ export default Plugin.define({
                         .then(({ ok, text, fireAt }) => {
                           if (!ok || text === undefined || fireAt === undefined) return
                           drop(props.session.id, job.id)
-                          props.screen.composer.setText(`/delayed-message ${draftTime(fireAt)} ${text}`)
+                          props.screen.composer.setText(`/delayed ${draftTime(fireAt)} ${text}`)
                           props.close()
                           props.screen.composer.focus()
                         })

@@ -14,7 +14,7 @@
 
 ---
 
-`/delayed-message` schedules a message for a future time and delivers it as a normal user
+`/delayed` schedules a message for a future time and delivers it as a normal user
 message. The trick: the text never enters the model context at scheduling time. The model
 sees it only when it arrives.
 
@@ -50,9 +50,9 @@ Requires OpenCode V2. The pill is part of the desktop app; the command itself wo
 ## 🚀 Usage
 
 ```text
-/delayed-message 03:00 call mom
-/delayed-message 2026-11-05 03:00 check the deploy
-/delayed-message +30m stretch
+/delayed 03:00 call mom
+/delayed 2026-11-05 03:00 check the deploy
+/delayed +30m stretch
 ```
 
 | Time | Meaning |
@@ -82,14 +82,14 @@ Treat this as a prompt-level guarantee, not encryption.
 Above the composer, while a message is pending:
 
 ```text
-⏰ Delayed
+⏰ 2 delayed
 ```
 
-The label is constant — the list behind it carries the times and the count.
-Click it for one line per message with the scheduled time, a preview, and the
-countdown, like the app's own subagent list. `✎` to edit and `×` to cancel appear
+The label carries the pending count, like the subagent pill; the list behind it
+carries the times. Click it for one line per message with the scheduled time, a
+preview, and the countdown, like the app's own subagent list. `✎` to edit and `×` to cancel appear
 when you hover a row. Edit cancels the pending job and puts the whole command back
-into the composer — `/delayed-message`, the scheduled time, and the full text —
+into the composer — `/delayed`, the scheduled time, and the full text —
 with the cursor in the prompt. Adjust anything and submit to reschedule. The pill
 disappears when the message is delivered or cancelled.
 
@@ -113,7 +113,7 @@ waits for the next time that directory loads.
 
 ## 🧠 How it works
 
-- `ctx.command.transform` registers `/delayed-message`; the executor gets the raw text
+- `ctx.command.transform` registers `/delayed`; the executor gets the raw text
   outside the prompt.
 - The job goes to `ctx.storage` (`pending/<uuid>`) and a `setTimeout` chain, split at the
   24.8-day timer cap.

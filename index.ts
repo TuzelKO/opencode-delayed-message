@@ -1,7 +1,7 @@
 import { Plugin } from "@opencode/plugin"
 import { Delayed } from "./rpc"
 
-// /delayed-message <time> <message>
+// /delayed <time> <message>
 //
 // The command is registered by the plugin, so the message never becomes a user
 // prompt at scheduling time: it stays inside `execute` and the model sees it
@@ -166,7 +166,7 @@ export default Plugin.define({
 
     await ctx.command.transform((editor) => {
       editor.add({
-        name: "delayed-message",
+        name: "delayed",
         description: "Wake this session later with a message",
         execute: async ({ sessionID, prompt }) => {
           try {
@@ -186,7 +186,7 @@ export default Plugin.define({
             if (!time || !message) {
               await alert(
                 sessionID,
-                "Usage: /delayed-message <time> <message>\n" +
+                "Usage: /delayed <time> <message>\n" +
                   "Time: HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d.",
               )
               return
