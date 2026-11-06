@@ -19,15 +19,17 @@ const draftTime = (at: number) => {
 }
 
 const css = `
-.dm { display: flex; flex-direction: column; gap: 1px; min-width: 280px; max-width: 440px; margin: -4px -6px; }
+[data-slot="session-plugin-pill-popover"]:has(.dm) > div:first-child { display: none; }
+.dm { display: flex; flex-direction: column; gap: 1px; min-width: 280px; max-width: 440px; margin: -4px -2px; }
+.dm:focus { outline: none; }
 .dm-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 13px; }
 .dm-row:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .dm-time { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
 .dm-text { flex: 1 1 auto; min-width: 0; opacity: .72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dm-left { flex: none; min-width: 52px; text-align: right; opacity: .5; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity .12s ease; }
 .dm-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
-.dm-row:hover .dm-left, .dm-row:focus-within .dm-left { opacity: 0; }
-.dm-row:hover .dm-actions, .dm-row:focus-within .dm-actions { opacity: 1; pointer-events: auto; }
+.dm-row:hover .dm-left, .dm-row:has(.dm-action:focus-visible) .dm-left { opacity: 0; }
+.dm-row:hover .dm-actions, .dm-row:has(.dm-action:focus-visible) .dm-actions { opacity: 1; pointer-events: auto; }
 .dm-action { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .55; cursor: pointer; font: inherit; line-height: 1; }
 .dm-action:hover { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }
 `
@@ -182,7 +184,7 @@ export default Plugin.define({
         }
       },
       menu: (props) => (
-        <div class="dm">
+        <div class="dm" tabIndex={0}>
           <For each={jobs()[props.session.id] ?? []}>
             {(job) => (
               <div class="dm-row">
