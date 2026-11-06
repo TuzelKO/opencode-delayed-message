@@ -26,8 +26,8 @@ the text into the conversation early.
 - 🕰️ **Say it your way** — `HH:MM`, an absolute date, or a relative duration.
 - 🔒 **Private until delivery** — the text lives in plugin storage, not in the prompt.
 - 💾 **Durable** — jobs survive a service restart; timers re-arm from storage.
-- 🪟 **Desktop pill** — pending count and time above the composer, with a preview and a
-  cancel button.
+- 🪟 **Desktop pill** — the pending count above the composer; click it for the times,
+  previews, edit and cancel.
 - ⏱️ **On time in the desktop app** — the app's main process keeps the clock, so an idle
   window or an evicted location does not delay delivery.
 - 🤫 **Zero model turns on schedule** — a successful schedule does not wake the model.
