@@ -95,10 +95,13 @@ with the cursor in the prompt. Adjust anything and submit to reschedule. The pil
 disappears when the message is delivered or cancelled.
 
 The terminal UI has no pill, and a successful schedule leaves no trace in the
-transcript — the session sees the text only when it is delivered.
+transcript — the session sees the text only when it is delivered. A malformed
+command is different: the error returns to the client that ran it, which shows it
+next to the composer and restores the typed text; it never becomes a session
+message.
 
 The pill follows the app language: English, Russian, German, French, and Chinese are
-included. Error notes are English, because they are written for the model.
+included. Command errors are English.
 
 ## 💾 Durability
 

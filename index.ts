@@ -142,65 +142,51 @@ export default Plugin.define({
       timers.set(job.id, timer)
     }
 
-    // Errors have no pill to lean on, so they drain at once.
-    const alert = (sessionID: string, text: string) =>
-      ctx.session.synthetic({ sessionID, text, resume: true }).catch(() => {})
-
+    // A command error returns to the client that ran it: the composer shows a
+    // toast and restores the text, so a bad schedule never enters the session.
     await ctx.command.transform((editor) => {
       editor.add({
         name: "delayed",
         description: "Wake this session later with a message",
         execute: async ({ sessionID, prompt }) => {
-          try {
-            const raw = prompt.text.trim()
-            const first = /^(\S+)(?:\s+|$)/.exec(raw)
-            const when = first?.[1] ?? ""
-            let rest = raw.slice(first?.[0].length ?? 0)
+          const raw = prompt.text.trim()
+          const first = /^(\S+)(?:\s+|$)/.exec(raw)
+          const when = first?.[1] ?? ""
+          let rest = raw.slice(first?.[0].length ?? 0)
 
-            let time = when
-            const second = /^(\S+)/.exec(rest)?.[1]
-            if (/^\d{4}-\d{2}-\d{2}$/.test(when) && second && /^\d{1,2}:\d{2}(:\d{2})?$/.test(second)) {
-              time = `${when}T${second}`
-              rest = rest.slice(second.length)
-            }
-
-            const message = rest.trim()
-            if (!time || !message) {
-              await alert(
-                sessionID,
-                "Usage: /delayed <time> <message>\n" +
-                  "Time: HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d.",
-              )
-              return
-            }
-
-            const now = Date.now()
-            const at = resolveTime(time, now)
-            if (typeof at === "string") {
-              await alert(sessionID, `Delayed message not scheduled: ${at}.`)
-              return
-            }
-
-            const job: Job = {
-              id: crypto.randomUUID(),
-              sessionID,
-              message,
-              fireAt: at,
-              directory: ctx.location.directory,
-            }
-            await ctx.storage.set(key(job.id), job)
-            arm(job)
-            await rpc.events.emit("scheduled", {
-              sessionID,
-              id: job.id,
-              fireAt: at,
-              preview: previewOf(message),
-              directory: job.directory,
-            }).catch(() => {})
-          } catch (error) {
-            console.error("[delayed-message] schedule failed:", error)
-            await alert(sessionID, `Delayed message failed: ${error instanceof Error ? error.message : String(error)}`)
+          let time = when
+          const second = /^(\S+)/.exec(rest)?.[1]
+          if (/^\d{4}-\d{2}-\d{2}$/.test(when) && second && /^\d{1,2}:\d{2}(:\d{2})?$/.test(second)) {
+            time = `${when}T${second}`
+            rest = rest.slice(second.length)
           }
+
+          const message = rest.trim()
+          if (!time || !message)
+            throw new Error(
+              "Usage: /delayed <time> <message> — time: HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d.",
+            )
+
+          const now = Date.now()
+          const at = resolveTime(time, now)
+          if (typeof at === "string") throw new Error(`Delayed message not scheduled: ${at}.`)
+
+          const job: Job = {
+            id: crypto.randomUUID(),
+            sessionID,
+            message,
+            fireAt: at,
+            directory: ctx.location.directory,
+          }
+          await ctx.storage.set(key(job.id), job)
+          arm(job)
+          await rpc.events.emit("scheduled", {
+            sessionID,
+            id: job.id,
+            fireAt: at,
+            preview: previewOf(message),
+            directory: job.directory,
+          }).catch(() => {})
         },
       })
     })
