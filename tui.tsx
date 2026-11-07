@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createSignal, on, onCleanup, Show } from "solid-js"
 import { Delayed } from "./rpc"
