@@ -49,19 +49,6 @@ const resolveTime = (raw: string, now: number): number | string => {
   return at
 }
 
-const stamp = (at: number) =>
-  `${new Date(at).toLocaleString("sv-SE", { hour12: false })} ${Intl.DateTimeFormat().resolvedOptions().timeZone}`
-
-const humanize = (ms: number) => {
-  const seconds = Math.max(0, Math.round(ms / 1000))
-  const days = Math.floor(seconds / 86_400)
-  const hours = Math.floor((seconds % 86_400) / 3_600)
-  const minutes = Math.floor((seconds % 3_600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
-}
-
 const previewOf = (message: string) => message.replace(/\s+/g, " ").trim().slice(0, 120)
 
 export default Plugin.define({
@@ -155,11 +142,6 @@ export default Plugin.define({
       timers.set(job.id, timer)
     }
 
-    // The GUI pill is the immediate feedback; the note is only a transcript
-    // record, so it waits for the next turn instead of waking the model.
-    const note = (sessionID: string, text: string) =>
-      ctx.session.synthetic({ sessionID, text, resume: false }).catch(() => {})
-
     // Errors have no pill to lean on, so they drain at once.
     const alert = (sessionID: string, text: string) =>
       ctx.session.synthetic({ sessionID, text, resume: true }).catch(() => {})
@@ -215,7 +197,6 @@ export default Plugin.define({
               preview: previewOf(message),
               directory: job.directory,
             }).catch(() => {})
-            await note(sessionID, `Delayed message scheduled for ${stamp(at)} (in ${humanize(at - now)}).`)
           } catch (error) {
             console.error("[delayed-message] schedule failed:", error)
             await alert(sessionID, `Delayed message failed: ${error instanceof Error ? error.message : String(error)}`)

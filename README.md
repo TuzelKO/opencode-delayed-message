@@ -30,7 +30,8 @@ the text into the conversation early.
   previews, edit and cancel.
 - ⏱️ **On time in the desktop app** — the app's main process keeps the clock, so an idle
   window or an evicted location does not delay delivery.
-- 🤫 **Zero model turns on schedule** — a successful schedule does not wake the model.
+- 🤫 **Zero model turns on schedule** — a successful schedule adds nothing to the
+  transcript: no wake, no note in the context.
 - 🌍 **Localized UI** — English, Russian, German, French, Chinese.
 
 ## 📦 Install
@@ -93,10 +94,11 @@ into the composer — `/delayed`, the scheduled time, and the full text —
 with the cursor in the prompt. Adjust anything and submit to reschedule. The pill
 disappears when the message is delivered or cancelled.
 
-The terminal UI has no pill — there the transcript note is the only trace.
+The terminal UI has no pill, and a successful schedule leaves no trace in the
+transcript — the session sees the text only when it is delivered.
 
 The pill follows the app language: English, Russian, German, French, and Chinese are
-included. Transcript notes are English, because they are written for the model.
+included. Error notes are English, because they are written for the model.
 
 ## 💾 Durability
 
