@@ -195,15 +195,16 @@ function Pill(props: {
   const [hovered, setHovered] = createSignal(false)
   const list = () => props.jobs()[props.sessionID] ?? []
 
-  createEffect(
-    on(
-      () => props.sessionID,
-      (sessionID) => {
-        props.load(sessionID)
-      },
-    ),
-  )
-  onCleanup(props.context.data.on("server.connected", () => props.load(props.sessionID)))
+  const reload = () => {
+    const sessionID = props.sessionID
+    void props.context.data.session
+      .sync(sessionID)
+      .catch(() => {})
+      .then(() => props.load(sessionID))
+  }
+
+  createEffect(on(() => props.sessionID, reload))
+  onCleanup(props.context.data.on("server.connected", reload))
 
   return (
     <Show when={list().length > 0}>
