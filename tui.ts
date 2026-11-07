@@ -1,6 +1,10 @@
-/** @jsxImportSource @opentui/solid */
+// TUI plugins installed from npm otherwise keep their own Solid runtime, so
+// signals created here never reach the host renderer. Import the host's
+// modules through the OpenTUI runtime ids and build the tree with jsx() so the
+// host's reactive graph owns every expression (OpenCode issue #39986).
 import type { Plugin } from "@opencode/plugin/tui"
-import { createEffect, createSignal, on, onCleanup, Show } from "solid-js"
+import { createEffect, createSignal, onCleanup } from "opentui:runtime-module:solid-js"
+import { jsx } from "opentui:runtime-module:%40opentui%2Fsolid%2Fjsx-runtime"
 import { Delayed } from "./rpc"
 
 type Pending = {
@@ -9,6 +13,8 @@ type Pending = {
   preview: string
   text: string
 }
+
+const h = jsx as unknown as (type: any, props: Record<string, any>, key?: any) => any
 
 const pad = (value: number) => String(value).padStart(2, "0")
 
@@ -53,6 +59,11 @@ export default {
       return directory ? { location: { directory } } : undefined
     }
 
+    const invalidate = (sessionID: string) => {
+      context.data.session.pending.invalidate(sessionID)
+      context.data.session.invalidate(sessionID)
+    }
+
     const load = (sessionID: string, directory?: string) => {
       const options = directory ? { location: { directory } } : location(sessionID)
       return rpc
@@ -60,26 +71,31 @@ export default {
         .then((value) => {
           const { jobs: list } = value as { jobs: Pending[] }
           setJobs((prev) => ({ ...prev, [sessionID]: list }))
+          invalidate(sessionID)
         })
         .catch(() => {})
     }
 
-    const put = (sessionID: string, job: Pending) =>
+    const put = (sessionID: string, job: Pending) => {
       setJobs((prev) => ({
         ...prev,
         [sessionID]: [...(prev[sessionID] ?? []).filter((item) => item.id !== job.id), job].sort(
           (a, b) => a.fireAt - b.fireAt,
         ),
       }))
+      invalidate(sessionID)
+    }
 
-    const drop = (sessionID: string, id: string) =>
+    const drop = (sessionID: string, id: string) => {
       setJobs((prev) => ({
         ...prev,
         [sessionID]: (prev[sessionID] ?? []).filter((item) => item.id !== id),
       }))
+      invalidate(sessionID)
+    }
 
     const stops = [
-      rpc.events.on("scheduled", (event) => {
+      context.data.on("rpc.delayed-message.scheduled", (event) => {
         const { sessionID, id, fireAt, preview, text } = event.data as {
           sessionID: string
           id: string
@@ -89,11 +105,11 @@ export default {
         }
         put(sessionID, { id, fireAt, preview, text })
       }),
-      rpc.events.on("fired", (event) => {
+      context.data.on("rpc.delayed-message.fired", (event) => {
         const { sessionID, id } = event.data as { sessionID: string; id: string }
         drop(sessionID, id)
       }),
-      rpc.events.on("cancelled", (event) => {
+      context.data.on("rpc.delayed-message.cancelled", (event) => {
         const { sessionID, id } = event.data as { sessionID: string; id: string }
         drop(sessionID, id)
       }),
@@ -174,9 +190,14 @@ export default {
 
     context.ui.slot({
       append: "session.composer.top",
-      render: (props) => (
-        <Pill context={context} sessionID={props.sessionID} jobs={jobs} load={load} open={open} />
-      ),
+      render: (props) =>
+        h(Pill, {
+          context,
+          sessionID: props.sessionID,
+          jobs,
+          load,
+          open,
+        }),
     })
 
     return () => {
@@ -193,7 +214,11 @@ function Pill(props: {
   open: (sessionID: string) => void
 }) {
   const [hovered, setHovered] = createSignal(false)
-  const list = () => props.jobs()[props.sessionID] ?? []
+  const count = () => {
+    props.context.data.session.get(props.sessionID)
+    props.context.data.session.pending.list(props.sessionID)
+    return (props.jobs()[props.sessionID] ?? []).length
+  }
 
   const reload = () => {
     const sessionID = props.sessionID
@@ -204,18 +229,25 @@ function Pill(props: {
   createEffect(reload)
   onCleanup(props.context.data.on("server.connected", reload))
 
-  return (
-    <Show when={list().length > 0}>
-      <box
-        flexShrink={0}
-        onMouseOver={() => setHovered(true)}
-        onMouseOut={() => setHovered(false)}
-        onMouseUp={() => props.open(props.sessionID)}
-      >
-        <text fg={hovered() ? props.context.theme.text.base : props.context.theme.text.muted} wrapMode="none">
-          {`⏰ ${list().length} delayed`}
-        </text>
-      </box>
-    </Show>
-  )
+  return h("box", {
+    get height() {
+      return count() > 0 ? 1 : 0
+    },
+    flexShrink: 0,
+    onMouseOver: () => setHovered(true),
+    onMouseOut: () => setHovered(false),
+    onMouseUp: () => props.open(props.sessionID),
+    get children() {
+      return h("text", {
+        get fg() {
+          return hovered() ? props.context.theme.text.base : props.context.theme.text.muted
+        },
+        wrapMode: "none",
+        get children() {
+          const n = count()
+          return n > 0 ? `⏰ ${n} delayed` : ""
+        },
+      })
+    },
+  })
 }

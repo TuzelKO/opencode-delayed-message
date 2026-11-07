@@ -1,4 +1,4 @@
-import { Rpc } from "@opencode/plugin/rpc"
+import type { Rpc } from "@opencode/plugin/rpc"
 
 // Bridge between the server plugin and its TUI/GUI parts: the pill asks
 // `pending` on mount, follows `scheduled`/`fired`/`cancelled`, and cancels or
@@ -16,7 +16,7 @@ const job = {
   additionalProperties: false,
 } as const
 
-export const Delayed = Rpc.define({
+export const Delayed = {
   id: "delayed-message",
   methods: {
     pending: {
@@ -160,4 +160,4 @@ export const Delayed = Rpc.define({
       },
     },
   },
-})
+} as const satisfies Rpc.PortableDefinition
