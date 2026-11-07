@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { Plugin } from "@opencode/plugin/tui"
+import type { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createSignal, on, onCleanup, Show } from "solid-js"
 import { Delayed } from "./rpc"
 
@@ -42,9 +42,9 @@ const draftTime = (at: number) => {
   return date.getSeconds() === 0 ? `${day}T${time}` : `${day}T${time}:${pad(date.getSeconds())}`
 }
 
-export default Plugin.define({
+export default {
   id: "delayed-message.tui",
-  setup(context) {
+  setup(context: Plugin.Context) {
     const rpc = context.client.rpc(Delayed)
     const [jobs, setJobs] = createSignal<Record<string, Pending[]>>({})
 
@@ -183,7 +183,7 @@ export default Plugin.define({
       for (const stop of stops) stop()
     }
   },
-})
+}
 
 function Pill(props: {
   context: Plugin.Context
