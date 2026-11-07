@@ -49,7 +49,7 @@ export default Plugin.define({
     const [jobs, setJobs] = createSignal<Record<string, Pending[]>>({})
 
     const location = (sessionID: string) => {
-      const directory = context.data.session.get(sessionID)?.location.directory
+      const directory = context.data.session.get(sessionID)?.location.directory ?? context.location?.directory
       return directory ? { location: { directory } } : undefined
     }
 
