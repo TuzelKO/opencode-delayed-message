@@ -51,33 +51,27 @@ const resolveTime = (raw: string, now: number): number | string => {
 
 const previewOf = (message: string) => message.replace(/\s+/g, " ").trim().slice(0, 120)
 
-// A notice is a synthetic message the UI renders from `description`; its
-// `text` is only a sentinel, and the context hook below drops it before any
-// model request, so the session never reads what the user is told.
+// Older versions wrote notices into the transcript. Drop them from every model
+// request: the sentinel covers 0.1.11, and the legacy text patterns cover the
+// pre-fix notes that carried their text without a marker.
 const NOTICE = "\u200b[delayed-message]"
-const isNotice = (message: { content: ReadonlyArray<{ type: string; text?: string | null }> }) =>
-  message.content.some((part) => part.type === "text" && part.text?.startsWith(NOTICE) === true)
+const LEGACY_NOTICE =
+  /^(?:Usage: \/delayed <time> <message>\nTime: |Delayed message (?:not scheduled: |failed: |scheduled for \d{4}-\d{2}-\d{2} ))/
+const isNotice = (message: { role: string; content: ReadonlyArray<{ type: string; text?: string | null }> }) =>
+  message.role === "user" &&
+  message.content.some(
+    (part) =>
+      part.type === "text" &&
+      (part.text?.startsWith(NOTICE) === true || (part.text !== undefined && part.text !== null && LEGACY_NOTICE.test(part.text))),
+  )
 
 const dropNotices = (
-  event: { messages: Array<{ content: ReadonlyArray<{ type: string; text?: string | null }> }> },
+  event: { messages: Array<{ role: string; content: ReadonlyArray<{ type: string; text?: string | null }> }> },
 ) => {
   for (let index = event.messages.length - 1; index >= 0; index--) {
     const message = event.messages[index]
     if (message && isNotice(message)) event.messages.splice(index, 1)
   }
-}
-
-const stamp = (at: number) =>
-  `${new Date(at).toLocaleString("sv-SE", { hour12: false })} ${Intl.DateTimeFormat().resolvedOptions().timeZone}`
-
-const humanize = (ms: number) => {
-  const seconds = Math.max(0, Math.round(ms / 1000))
-  const days = Math.floor(seconds / 86_400)
-  const hours = Math.floor((seconds % 86_400) / 3_600)
-  const minutes = Math.floor((seconds % 3_600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
 }
 
 export default Plugin.define({
@@ -121,20 +115,7 @@ export default Plugin.define({
       },
     })
 
-    const notice = (sessionID: string, text: string) =>
-      ctx.session
-        .synthetic({
-          sessionID,
-          text: NOTICE,
-          description: text,
-          metadata: { source: "delayed-message" },
-          delivery: "queue",
-          resume: false,
-        })
-        .catch(() => {})
-
-    // The transcript needs the notice; the model must not read it. Keep it out
-    // of every request that carries history, including compaction.
+    // Drop old transcript notices from every request that carries history.
     await ctx.session.hook("context", dropNotices)
     await ctx.session.hook("compaction", dropNotices)
     await ctx.session.hook("generate", dropNotices)
@@ -191,8 +172,7 @@ export default Plugin.define({
     }
 
     // A command error returns to the client that ran it: the composer shows a
-    // toast and restores the text, while the chat notice keeps the reason in
-    // the transcript without reaching the model.
+    // toast and restores the text, so a bad schedule never enters the session.
     await ctx.command.transform((editor) => {
       editor.add({
         name: "delayed",
@@ -211,19 +191,14 @@ export default Plugin.define({
           }
 
           const message = rest.trim()
-          if (!time || !message) {
-            const usage = "Usage: /delayed <time> <message> — time: HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d."
-            await notice(sessionID, usage)
-            throw new Error(usage)
-          }
+          if (!time || !message)
+            throw new Error(
+              "Usage: /delayed <time> <message> — time: HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d.",
+            )
 
           const now = Date.now()
           const at = resolveTime(time, now)
-          if (typeof at === "string") {
-            const text = `Delayed message not scheduled: ${at}.`
-            await notice(sessionID, text)
-            throw new Error(text)
-          }
+          if (typeof at === "string") throw new Error(`Delayed message not scheduled: ${at}.`)
 
           const job: Job = {
             id: crypto.randomUUID(),
@@ -241,7 +216,6 @@ export default Plugin.define({
             preview: previewOf(message),
             directory: job.directory,
           }).catch(() => {})
-          await notice(sessionID, `Delayed message scheduled for ${stamp(at)} (in ${humanize(at - now)}).`)
         },
       })
     })
