@@ -53,8 +53,8 @@ export default Plugin.define({
       return directory ? { location: { directory } } : undefined
     }
 
-    const load = (sessionID: string) => {
-      const options = location(sessionID)
+    const load = (sessionID: string, directory?: string) => {
+      const options = directory ? { location: { directory } } : location(sessionID)
       return rpc
         .pending({ sessionID }, options)
         .then((value) => {
@@ -189,7 +189,7 @@ function Pill(props: {
   context: Plugin.Context
   sessionID: string
   jobs: () => Record<string, Pending[]>
-  load: (sessionID: string) => void
+  load: (sessionID: string, directory?: string) => void
   open: (sessionID: string) => void
 }) {
   const [hovered, setHovered] = createSignal(false)
@@ -197,13 +197,12 @@ function Pill(props: {
 
   const reload = () => {
     const sessionID = props.sessionID
-    void props.context.data.session
-      .sync(sessionID)
-      .catch(() => {})
-      .then(() => props.load(sessionID))
+    const directory = props.context.data.session.get(sessionID)?.location.directory
+    props.load(sessionID, directory)
   }
 
-  createEffect(on(() => props.sessionID, reload))
+  createEffect(on(() => props.sessionID, (sessionID) => void props.context.data.session.sync(sessionID).catch(() => {})))
+  createEffect(reload)
   onCleanup(props.context.data.on("server.connected", reload))
 
   return (
