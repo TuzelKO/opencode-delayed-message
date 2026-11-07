@@ -201,7 +201,6 @@ function Pill(props: {
     props.load(sessionID, directory)
   }
 
-  createEffect(on(() => props.sessionID, (sessionID) => void props.context.data.session.sync(sessionID).catch(() => {})))
   createEffect(reload)
   onCleanup(props.context.data.on("server.connected", reload))
 
