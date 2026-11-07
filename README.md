@@ -30,8 +30,8 @@ the text into the conversation early.
   previews, edit and cancel.
 - ⏱️ **On time in the desktop app** — the app's main process keeps the clock, so an idle
   window or an evicted location does not delay delivery.
-- 🤫 **Zero model turns on schedule** — a successful schedule adds nothing to the
-  transcript: no wake, no note in the context.
+- 🤫 **Zero model turns on schedule** — a successful schedule writes a notice to the
+  transcript and nothing to the model context: no wake, no note the session can read.
 - 🌍 **Localized UI** — English, Russian, German, French, Chinese.
 
 ## 📦 Install
@@ -94,14 +94,16 @@ into the composer — `/delayed`, the scheduled time, and the full text —
 with the cursor in the prompt. Adjust anything and submit to reschedule. The pill
 disappears when the message is delivered or cancelled.
 
-The terminal UI has no pill, and a successful schedule leaves no trace in the
-transcript — the session sees the text only when it is delivered. A malformed
-command is different: the error returns to the client that ran it, which shows it
-next to the composer and restores the typed text; it never becomes a session
-message.
+Every schedule and every command error leaves a notice in the transcript, in the
+terminal UI too. The notice is a synthetic message: the UI draws its `description`,
+while its `text` is only a sentinel, and a context hook removes those messages from
+every model request. OpenCode projects a notice at the session's next turn, so the
+pill (desktop) or the error toast (any client) is still the immediate signal; the
+notice is what stays in the history. A malformed command also returns to the client
+that ran it, which restores the typed text next to the composer.
 
 The pill follows the app language: English, Russian, German, French, and Chinese are
-included. Command errors are English.
+included. Command errors and notices are English.
 
 ## 💾 Durability
 
@@ -124,6 +126,9 @@ waits for the next time that directory loads.
   24.8-day timer cap.
 - On fire: `ctx.session.prompt({ sessionID, text })` — a real user prompt, so the session
   wakes.
+- Notices go through `ctx.session.synthetic` with `resume: false` and queued delivery;
+  their `text` is a sentinel and their `description` is what the UI shows. Hooks on
+  `context`, `compaction`, `generate`, and `title` drop them from every model request.
 - The GUI talks to the server through an RPC: `pending`, `cancel`, `edit`, `deliver`, and
   the events `scheduled`, `fired`, `cancelled`.
 - The GUI main process mirrors `scheduled` jobs into its own storage and arms Node timers.
