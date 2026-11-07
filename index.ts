@@ -82,14 +82,14 @@ export default Plugin.define({
     const rpc = await ctx.rpc.register(Delayed, {
       pending: async (input) => {
         const { sessionID } = input as { sessionID: string }
-        const jobs: Array<{ id: string; fireAt: number; preview: string }> = []
+        const jobs: Array<{ id: string; fireAt: number; preview: string; text: string }> = []
         let after: string | undefined
         do {
           const page = await ctx.storage.scan(after ? { prefix: "pending/", after } : { prefix: "pending/" })
           for (const entry of page.entries) {
             const job = entry.value as Job
             if (job?.sessionID !== sessionID || !job.id || !job.fireAt) continue
-            jobs.push({ id: job.id, fireAt: job.fireAt, preview: previewOf(job.message) })
+            jobs.push({ id: job.id, fireAt: job.fireAt, preview: previewOf(job.message), text: job.message })
           }
           after = page.next
         } while (after)
@@ -104,6 +104,42 @@ export default Plugin.define({
         const job = await withdraw(sessionID, id)
         if (!job) return { ok: false }
         return { ok: true, text: job.message, fireAt: job.fireAt }
+      },
+      update: async (input) => {
+        const { sessionID, id, text, time } = input as {
+          sessionID: string
+          id: string
+          text?: string
+          time?: string
+        }
+        const stored = (await ctx.storage.get(key(id))) as Job | undefined
+        if (!stored || stored.sessionID !== sessionID) return { ok: false, error: "not found" }
+        if (claimed.has(id) || delivering.has(id)) return { ok: false, error: "already delivering" }
+        if (text !== undefined && !text.trim()) return { ok: false, error: "message is empty" }
+        const fireAt = time === undefined ? stored.fireAt : resolveTime(time, Date.now())
+        if (typeof fireAt === "string") return { ok: false, error: fireAt }
+        const timer = timers.get(id)
+        if (timer) {
+          clearTimeout(timer)
+          timers.delete(id)
+        }
+        const job: Job = { ...stored, message: text ?? stored.message, fireAt }
+        try {
+          await ctx.storage.set(key(id), job)
+        } catch (error) {
+          arm(stored)
+          throw error
+        }
+        arm(job)
+        await rpc.events.emit("scheduled", {
+          sessionID,
+          id,
+          fireAt,
+          preview: previewOf(job.message),
+          text: job.message,
+          directory: job.directory,
+        }).catch(() => {})
+        return { ok: true, fireAt }
       },
       deliver: async (input) => {
         const { sessionID, id } = input as { sessionID: string; id: string }
@@ -214,6 +250,7 @@ export default Plugin.define({
             id: job.id,
             fireAt: at,
             preview: previewOf(message),
+            text: message,
             directory: job.directory,
           }).catch(() => {})
         },

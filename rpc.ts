@@ -1,7 +1,8 @@
 import { Rpc } from "@opencode/plugin/rpc"
 
-// Bridge between the server plugin and its GUI part: the pill asks `pending`
-// on mount, follows `scheduled`/`fired`/`cancelled`, and cancels by id.
+// Bridge between the server plugin and its TUI/GUI parts: the pill asks
+// `pending` on mount, follows `scheduled`/`fired`/`cancelled`, and cancels or
+// updates by id.
 
 const job = {
   type: "object",
@@ -9,8 +10,9 @@ const job = {
     id: { type: "string" },
     fireAt: { type: "number" },
     preview: { type: "string" },
+    text: { type: "string" },
   },
-  required: ["id", "fireAt", "preview"],
+  required: ["id", "fireAt", "preview", "text"],
   additionalProperties: false,
 } as const
 
@@ -93,6 +95,31 @@ export const Delayed = Rpc.define({
         additionalProperties: false,
       },
     },
+    // Changes the text and/or time of a pending job in place. The TUI edits
+    // through this; the job id and its timer stay the same.
+    update: {
+      input: {
+        type: "object",
+        properties: {
+          sessionID: { type: "string" },
+          id: { type: "string" },
+          text: { type: "string" },
+          time: { type: "string" },
+        },
+        required: ["sessionID", "id"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          error: { type: "string" },
+          fireAt: { type: "number" },
+        },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+    },
   },
   events: {
     scheduled: {
@@ -103,9 +130,10 @@ export const Delayed = Rpc.define({
           id: { type: "string" },
           fireAt: { type: "number" },
           preview: { type: "string" },
+          text: { type: "string" },
           directory: { type: "string" },
         },
-        required: ["sessionID", "id", "fireAt", "preview", "directory"],
+        required: ["sessionID", "id", "fireAt", "preview", "text", "directory"],
         additionalProperties: false,
       },
     },

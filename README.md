@@ -26,8 +26,8 @@ the text into the conversation early.
 - 🕰️ **Say it your way** — `HH:MM`, an absolute date, or a relative duration.
 - 🔒 **Private until delivery** — the text lives in plugin storage, not in the prompt.
 - 💾 **Durable** — jobs survive a service restart; timers re-arm from storage.
-- 🪟 **Desktop pill** — the pending count above the composer; click it for the times,
-  previews, edit and cancel.
+- 🪟 **Pills above the composer** — in the desktop app and the terminal UI; click for the
+  times, previews, edit, reschedule and cancel.
 - ⏱️ **On time in the desktop app** — the app's main process keeps the clock, so an idle
   window or an evicted location does not delay delivery.
 - 🤫 **Zero model turns on schedule** — a successful schedule adds nothing to the
@@ -46,7 +46,8 @@ Or straight from Git:
 opencode plugin add github:TuzelKO/opencode-delayed-message
 ```
 
-Requires OpenCode V2. The pill is part of the desktop app; the command itself works anywhere.
+Requires OpenCode V2. The desktop app and the terminal UI each have a pill; the command
+itself works anywhere.
 
 ## 🚀 Usage
 
@@ -78,7 +79,7 @@ The honest caveat: the text is stored on disk in OpenCode's database. The model 
 it through the prompt, but an agent with shell access to the machine could read the storage.
 Treat this as a prompt-level guarantee, not encryption.
 
-## 🪟 The desktop pill
+## 🪟 The pill
 
 Above the composer, while a message is pending:
 
@@ -88,22 +89,26 @@ Above the composer, while a message is pending:
 
 The label carries the pending count, like the subagent pill; the list behind it
 carries the times. Click it for one line per message with the scheduled time, a
-preview, and the countdown, like the app's own subagent list. `✎` to edit and `×` to cancel appear
-when you hover a row. Edit cancels the pending job and puts the whole command back
-into the composer — `/delayed`, the scheduled time, and the full text —
-with the cursor in the prompt. Adjust anything and submit to reschedule. The pill
-disappears when the message is delivered or cancelled.
+preview, and the countdown, like the app's own subagent list. In the desktop app,
+`✎` to edit and `×` to cancel appear when you hover a row. Edit cancels the pending job
+and puts the whole command back into the composer — `/delayed`, the scheduled time, and
+the full text — with the cursor in the prompt. Adjust anything and submit to reschedule.
 
-The terminal UI has no pill, and a successful schedule leaves no trace in the
-transcript — the session sees the text only when it is delivered. A malformed
-command is different: the error returns to the client that ran it, which shows it
-next to the composer and restores the typed text; it never becomes a session
+In the terminal UI the same pill opens a list: `Enter` edits the message in place,
+`ctrl+t` changes the time, `ctrl+x` cancels. Editing and rescheduling go through the
+plugin's `update` RPC, so the job keeps its id and its timer is re-armed without a new
+command. There is no command to remember; the pill is the entry point.
+
+The pill disappears when the message is delivered or cancelled. A successful schedule
+leaves no trace in the transcript — the session sees the text only when it is delivered.
+A malformed command is different: the error returns to the client that ran it, which
+shows it next to the composer and restores the typed text; it never becomes a session
 message.
 
-The pill follows the app language: English, Russian, German, French, and Chinese are
-included. Command errors are English. Notices written by earlier versions are
-dropped from model requests, so an old error in a session's history cannot wake
-the session again.
+The desktop pill follows the app language: English, Russian, German, French, and Chinese
+are included. The terminal commands are English. Command errors are English. Notices
+written by earlier versions are dropped from model requests, so an old error in a
+session's history cannot wake the session again.
 
 ## 💾 Durability
 
@@ -128,8 +133,10 @@ waits for the next time that directory loads.
   wakes.
 - Hooks on `context`, `compaction`, `generate`, and `title` drop notices written by
   earlier versions from every model request.
-- The GUI talks to the server through an RPC: `pending`, `cancel`, `edit`, `deliver`, and
-  the events `scheduled`, `fired`, `cancelled`.
+- The desktop and TUI parts talk to the server through an RPC: `pending`, `cancel`,
+  `edit`, `update`, `deliver`, and the events `scheduled`, `fired`, `cancelled`.
+- The TUI pill renders in `session.composer.top`, follows the same events, and opens a
+  `dialog.select`; `update` changes the text or time in place and re-arms the timer.
 - The GUI main process mirrors `scheduled` jobs into its own storage and arms Node timers.
   When one is due it calls `deliver` with the job's directory, which boots the location
   and delivers the message even though the server-side timer is gone.
