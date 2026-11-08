@@ -152,10 +152,39 @@ export default {
       context.ui.toast.show({ title: "Delayed message", message: "Cancelled", variant: "info" })
     }
 
+    const sendNow = async (sessionID: string, job: Pending) => {
+      try {
+        const { status } = (await rpc.deliver({ sessionID, id: job.id }, location(sessionID))) as {
+          status: string
+        }
+        if (status === "delivered" || status === "missing") {
+          drop(sessionID, job.id)
+          context.ui.toast.show({
+            title: "Delayed message",
+            message: status === "delivered" ? "Sent" : "Already sent",
+            variant: "success",
+          })
+          context.ui.dialog.clear()
+          return
+        }
+        context.ui.toast.show({
+          title: "Delayed message not sent",
+          message: status === "busy" ? "It is already being delivered." : "Delivery failed.",
+          variant: "error",
+        })
+      } catch {
+        context.ui.toast.show({
+          title: "Delayed message not sent",
+          message: "Delivery failed.",
+          variant: "error",
+        })
+      }
+    }
+
     const reschedule = async (sessionID: string, job: Pending) => {
       const time = await context.ui.dialog.prompt({
         title: "New time",
-        description: "HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d",
+        description: "HH:MM, YYYY-MM-DDTHH:MM, or 30m / 2h / 1d",
         value: draftTime(job.fireAt),
       })
       if (time === undefined) return
@@ -176,6 +205,7 @@ export default {
         actions: [
           { bind: "ctrl+x", title: "Cancel", onTrigger: (job) => void cancel(sessionID, job) },
           { bind: "ctrl+t", title: "Reschedule", onTrigger: (job) => void reschedule(sessionID, job) },
+          { bind: "ctrl+d", title: "Send now", onTrigger: (job) => void sendNow(sessionID, job) },
         ],
       })
       if (!selected) return

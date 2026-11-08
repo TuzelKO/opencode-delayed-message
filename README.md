@@ -54,7 +54,7 @@ itself works anywhere.
 ```text
 /delayed 03:00 call mom
 /delayed 2026-11-05 03:00 check the deploy
-/delayed +30m stretch
+/delayed 30m stretch
 ```
 
 | Time | Meaning |
@@ -62,7 +62,7 @@ itself works anywhere.
 | `HH:MM` / `H:MM` | the next occurrence; if it already passed today, tomorrow |
 | `YYYY-MM-DD HH:MM` | absolute local time; a past time is refused |
 | `YYYY-MM-DDTHH:MM` | same, ISO form without the space |
-| `+30s`, `+30m`, `+2h`, `+1d` | relative to now |
+| `30s`, `30m`, `2h`, `1d` | relative to now; a leading `+` is optional |
 
 The first token is the time; everything after it is the message, taken verbatim.
 
@@ -90,14 +90,16 @@ Above the composer, while a message is pending:
 The label carries the pending count, like the subagent pill; the list behind it
 carries the times. Click it for one line per message with the scheduled time, a
 preview, and the countdown, like the app's own subagent list. In the desktop app,
-`✎` to edit and `×` to cancel appear when you hover a row. Edit cancels the pending job
-and puts the whole command back into the composer — `/delayed`, the scheduled time, and
-the full text — with the cursor in the prompt. Adjust anything and submit to reschedule.
+`»` sends the message now, `✎` edits it, and `×` cancels it when you hover a row. Edit
+cancels the pending job and puts the whole command back into the composer — `/delayed`,
+the scheduled time, and the full text — with the cursor in the prompt. Adjust anything
+and submit to reschedule.
 
 In the terminal UI the same pill opens a list: `Enter` edits the message in place,
-`ctrl+t` changes the time, `ctrl+x` cancels. Editing and rescheduling go through the
-plugin's `update` RPC, so the job keeps its id and its timer is re-armed without a new
-command. There is no command to remember; the pill is the entry point.
+`ctrl+t` changes the time, `ctrl+d` sends it now, `ctrl+x` cancels. Editing and
+rescheduling go through the plugin's `update` RPC, so the job keeps its id and its timer
+is re-armed without a new command. There is no command to remember; the pill is the
+entry point.
 
 The pill disappears when the message is delivered or cancelled. A successful schedule
 leaves no trace in the transcript — the session sees the text only when it is delivered.

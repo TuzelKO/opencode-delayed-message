@@ -28,7 +28,7 @@ type Delivery = "delivered" | "busy" | "failed"
 const key = (id: string) => `pending/${id}`
 
 const resolveTime = (raw: string, now: number): number | string => {
-  const relative = /^\+(\d+)([smhd])$/.exec(raw)
+  const relative = /^\+?(\d+)([smhd])$/.exec(raw)
   if (relative) return now + Number(relative[1]) * UNIT_MS[relative[2]]
 
   const clock = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(raw)
@@ -229,7 +229,7 @@ export default Plugin.define({
           const message = rest.trim()
           if (!time || !message)
             throw new Error(
-              "Usage: /delayed <time> <message> — time: HH:MM, YYYY-MM-DDTHH:MM, or +30m / +2h / +1d.",
+              "Usage: /delayed <time> <message> — time: HH:MM, YYYY-MM-DDTHH:MM, or 30m / 2h / 1d.",
             )
 
           const now = Date.now()

@@ -42,6 +42,10 @@ export default Plugin.define({
       "menu.title": "Scheduled messages",
       "row.cancel": "Cancel",
       "row.edit": "Edit",
+      "row.send": "Send now",
+      "row.sent": "Sent",
+      "row.sendBusy": "Already delivering",
+      "row.sendFailed": "Could not send",
       "left.now": "now",
       "left.days": "{{days}}d {{hours}}h",
       "left.hours": "{{hours}}h {{minutes}}m",
@@ -53,6 +57,10 @@ export default Plugin.define({
       "menu.title": "Отложенные сообщения",
       "row.cancel": "Отменить",
       "row.edit": "Изменить",
+      "row.send": "Отправить сейчас",
+      "row.sent": "Отправлено",
+      "row.sendBusy": "Уже отправляется",
+      "row.sendFailed": "Не удалось отправить",
       "left.now": "сейчас",
       "left.days": "{{days}} д {{hours}} ч",
       "left.hours": "{{hours}} ч {{minutes}} мин",
@@ -64,6 +72,10 @@ export default Plugin.define({
       "menu.title": "Geplante Nachrichten",
       "row.cancel": "Abbrechen",
       "row.edit": "Bearbeiten",
+      "row.send": "Jetzt senden",
+      "row.sent": "Gesendet",
+      "row.sendBusy": "Wird bereits gesendet",
+      "row.sendFailed": "Senden fehlgeschlagen",
       "left.now": "jetzt",
       "left.days": "{{days}} T {{hours}} Std.",
       "left.hours": "{{hours}} Std. {{minutes}} Min.",
@@ -75,6 +87,10 @@ export default Plugin.define({
       "menu.title": "Messages programmés",
       "row.cancel": "Annuler",
       "row.edit": "Modifier",
+      "row.send": "Envoyer maintenant",
+      "row.sent": "Envoyé",
+      "row.sendBusy": "Envoi déjà en cours",
+      "row.sendFailed": "Échec de l'envoi",
       "left.now": "maintenant",
       "left.days": "{{days}} j {{hours}} h",
       "left.hours": "{{hours}} h {{minutes}} min",
@@ -86,6 +102,10 @@ export default Plugin.define({
       "menu.title": "已安排的消息",
       "row.cancel": "取消",
       "row.edit": "编辑",
+      "row.send": "立即发送",
+      "row.sent": "已发送",
+      "row.sendBusy": "正在发送",
+      "row.sendFailed": "发送失败",
       "left.now": "现在",
       "left.days": "{{days}} 天 {{hours}} 小时",
       "left.hours": "{{hours}} 小时 {{minutes}} 分钟",
@@ -156,6 +176,24 @@ export default Plugin.define({
       } catch {}
     }
 
+    const sendNow = async (sessionID: string, id: string) => {
+      try {
+        const { status } = await rpc.deliver({ sessionID, id })
+        if (status === "delivered" || status === "missing") {
+          drop(sessionID, id)
+          ctx.toast.show({ title: ctx.t("row.sent"), variant: "success" })
+          return
+        }
+        ctx.toast.show({
+          title: ctx.t("row.sendFailed"),
+          description: status === "busy" ? ctx.t("row.sendBusy") : undefined,
+          variant: "error",
+        })
+      } catch {
+        ctx.toast.show({ title: ctx.t("row.sendFailed"), variant: "error" })
+      }
+    }
+
     createKeyed(
       () => ctx.sessions.current()?.id,
       (sessionID) => {
@@ -189,6 +227,14 @@ export default Plugin.define({
                 <span class="dm-text">{job.preview}</span>
                 <span class="dm-left">{left(job.fireAt)}</span>
                 <span class="dm-actions">
+                  <button
+                    class="dm-action"
+                    title={ctx.t("row.send")}
+                    aria-label={ctx.t("row.send")}
+                    onClick={() => void sendNow(props.session.id, job.id)}
+                  >
+                    »
+                  </button>
                   <button
                     class="dm-action"
                     title={ctx.t("row.edit")}
