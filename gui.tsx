@@ -254,25 +254,27 @@ export default Plugin.define({
                   >
                     »
                   </button>
-                  <button
-                    class="dm-action"
-                    title={ctx.t("row.edit")}
-                    aria-label={ctx.t("row.edit")}
-                    onClick={() => {
-                      void rpc
-                        .edit({ sessionID: props.session.id, id: job.id })
-                        .then(({ ok, text, fireAt }) => {
-                          if (!ok || text === undefined || fireAt === undefined) return
-                          drop(props.session.id, job.id)
-                          props.screen.composer.setText(`/delayed ${draftTime(fireAt)} ${text}`)
-                          props.close()
-                          props.screen.composer.focus()
-                        })
-                        .catch(() => {})
-                    }}
-                  >
-                    ✎
-                  </button>
+                  {job.origin === "agent" ? null : (
+                    <button
+                      class="dm-action"
+                      title={ctx.t("row.edit")}
+                      aria-label={ctx.t("row.edit")}
+                      onClick={() => {
+                        void rpc
+                          .edit({ sessionID: props.session.id, id: job.id })
+                          .then(({ ok, text, fireAt }) => {
+                            if (!ok || text === undefined || fireAt === undefined) return
+                            drop(props.session.id, job.id)
+                            props.screen.composer.setText(`/delayed ${draftTime(fireAt)} ${text}`)
+                            props.close()
+                            props.screen.composer.focus()
+                          })
+                          .catch(() => {})
+                      }}
+                    >
+                      ✎
+                    </button>
+                  )}
                   <button
                     class="dm-action"
                     title={ctx.t("row.cancel")}

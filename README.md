@@ -99,7 +99,9 @@ preview, and the countdown, like the app's own subagent list. In the desktop app
 `»` sends the message now, `✎` edits it, and `×` cancels it when you hover a row. Edit
 cancels the pending job and puts the whole command back into the composer — `/delayed`,
 the scheduled time, and the full text — with the cursor in the prompt. Adjust anything
-and submit to reschedule.
+and submit to reschedule. Agent-scheduled rows have no `✎`: the desktop edit path
+re-creates the message through `/delayed`, which would silently make it yours, so those
+rows offer only send now and cancel.
 
 In the terminal UI the same pill opens a list: `Enter` edits the message in place,
 `ctrl+t` changes the time, `ctrl+e` sends it now, `ctrl+x` cancels. Editing and
