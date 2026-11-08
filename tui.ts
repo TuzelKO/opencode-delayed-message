@@ -12,6 +12,7 @@ type Pending = {
   fireAt: number
   preview: string
   text: string
+  origin?: "user" | "agent"
 }
 
 const h = jsx as unknown as (type: any, props: Record<string, any>, key?: any) => any
@@ -96,14 +97,15 @@ export default {
 
     const stops = [
       context.data.on("rpc.delayed-message.scheduled", (event) => {
-        const { sessionID, id, fireAt, preview, text } = event.data as {
+        const { sessionID, id, fireAt, preview, text, origin } = event.data as {
           sessionID: string
           id: string
           fireAt: number
           preview: string
           text: string
+          origin?: "user" | "agent"
         }
-        put(sessionID, { id, fireAt, preview, text })
+        put(sessionID, { id, fireAt, preview, text, origin })
       }),
       context.data.on("rpc.delayed-message.fired", (event) => {
         const { sessionID, id } = event.data as { sessionID: string; id: string }
@@ -198,14 +200,14 @@ export default {
       const selected = await context.ui.dialog.select<Pending>({
         title: "Delayed messages",
         options: list.map((job) => ({
-          title: job.preview,
+          title: job.origin === "agent" ? `✦ ${job.preview}` : job.preview,
           description: `${when(job.fireAt)} · ${left(job.fireAt)}`,
           value: job,
         })),
         actions: [
           { bind: "ctrl+x", title: "Cancel", onTrigger: (job) => void cancel(sessionID, job) },
           { bind: "ctrl+t", title: "Reschedule", onTrigger: (job) => void reschedule(sessionID, job) },
-          { bind: "ctrl+d", title: "Send now", onTrigger: (job) => void sendNow(sessionID, job) },
+          { bind: "ctrl+e", title: "Send now", onTrigger: (job) => void sendNow(sessionID, job) },
         ],
       })
       if (!selected) return
@@ -266,7 +268,9 @@ function Pill(props: {
     flexShrink: 0,
     onMouseOver: () => setHovered(true),
     onMouseOut: () => setHovered(false),
-    onMouseUp: () => props.open(props.sessionID),
+    // The dialog mounts under the cursor; wait for the release that clicked the
+    // pill to finish, or it can trigger a footer action (for example Send now).
+    onMouseUp: () => setTimeout(() => props.open(props.sessionID), 150),
     get children() {
       return h("text", {
         get fg() {

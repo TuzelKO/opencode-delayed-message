@@ -7,16 +7,22 @@ import { Delayed } from "./rpc"
 // prompt at scheduling time: it stays inside `execute` and the model sees it
 // only when the timer delivers it as a real user prompt.
 
+type Origin = "user" | "agent"
+
 type Job = {
   id: string
   sessionID: string
   message: string
   fireAt: number
   directory: string
+  origin: Origin
 }
 
 const MAX_TIMER = 2 ** 31 - 1
 const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
+
+// Jobs stored before the origin field existed belong to the user.
+const originOf = (job: { origin?: string }): Origin => (job.origin === "agent" ? "agent" : "user")
 
 // Setup can run more than once per directory; only the first timer may deliver.
 const claimed = new Set<string>()
@@ -51,6 +57,26 @@ const resolveTime = (raw: string, now: number): number | string => {
 
 const previewOf = (message: string) => message.replace(/\s+/g, " ").trim().slice(0, 120)
 
+const pad = (value: number) => String(value).padStart(2, "0")
+
+const stamp = (at: number) => {
+  const date = new Date(at)
+  const seconds = date.getSeconds()
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}${seconds === 0 ? "" : `:${pad(seconds)}`}`
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${time}`
+}
+
+const until = (at: number) => {
+  const ms = at - Date.now()
+  if (ms <= 0) return "now"
+  if (ms < 60_000) return `${Math.ceil(ms / 1000)}s`
+  const minutes = Math.ceil(ms / 60_000)
+  const hours = Math.floor(minutes / 60)
+  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`
+  if (hours > 0) return `${hours}h ${minutes % 60}m`
+  return `${minutes}m`
+}
+
 // Older versions wrote notices into the transcript. Drop them from every model
 // request: the sentinel covers 0.1.11, and the legacy text patterns cover the
 // pre-fix notes that carried their text without a marker.
@@ -79,20 +105,32 @@ export default Plugin.define({
   async setup(ctx) {
     const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
+    const listJobs = async (sessionID: string): Promise<Job[]> => {
+      const jobs: Job[] = []
+      let after: string | undefined
+      do {
+        const page = await ctx.storage.scan(after ? { prefix: "pending/", after } : { prefix: "pending/" })
+        for (const entry of page.entries) {
+          const job = entry.value as Job | undefined
+          if (!job?.id || !job.sessionID || !job.message || !job.fireAt) continue
+          if (job.sessionID !== sessionID) continue
+          jobs.push({ ...job, origin: originOf(job) })
+        }
+        after = page.next
+      } while (after)
+      return jobs
+    }
+
     const rpc = await ctx.rpc.register(Delayed, {
       pending: async (input) => {
         const { sessionID } = input as { sessionID: string }
-        const jobs: Array<{ id: string; fireAt: number; preview: string; text: string }> = []
-        let after: string | undefined
-        do {
-          const page = await ctx.storage.scan(after ? { prefix: "pending/", after } : { prefix: "pending/" })
-          for (const entry of page.entries) {
-            const job = entry.value as Job
-            if (job?.sessionID !== sessionID || !job.id || !job.fireAt) continue
-            jobs.push({ id: job.id, fireAt: job.fireAt, preview: previewOf(job.message), text: job.message })
-          }
-          after = page.next
-        } while (after)
+        const jobs = (await listJobs(sessionID)).map((job) => ({
+          id: job.id,
+          fireAt: job.fireAt,
+          preview: previewOf(job.message),
+          text: job.message,
+          origin: job.origin,
+        }))
         return { jobs }
       },
       cancel: async (input) => {
@@ -123,7 +161,7 @@ export default Plugin.define({
           clearTimeout(timer)
           timers.delete(id)
         }
-        const job: Job = { ...stored, message: text ?? stored.message, fireAt }
+        const job: Job = { ...stored, message: text ?? stored.message, fireAt, origin: originOf(stored) }
         try {
           await ctx.storage.set(key(id), job)
         } catch (error) {
@@ -138,6 +176,7 @@ export default Plugin.define({
           preview: previewOf(job.message),
           text: job.message,
           directory: job.directory,
+          origin: job.origin,
         }).catch(() => {})
         return { ok: true, fireAt }
       },
@@ -177,7 +216,15 @@ export default Plugin.define({
       if (delivering.has(job.id)) return "busy"
       delivering.add(job.id)
       try {
-        await ctx.session.prompt({ sessionID: job.sessionID, text: job.message })
+        if (originOf(job) === "agent")
+          await ctx.session.synthetic({
+            sessionID: job.sessionID,
+            text: job.message,
+            description: `Scheduled by agent — ${previewOf(job.message)}`,
+            metadata: { "delayed-message": { id: job.id, origin: "agent" } },
+            delivery: "queue",
+          })
+        else await ctx.session.prompt({ sessionID: job.sessionID, text: job.message })
       } catch (error) {
         console.error(`[delayed-message] delivery failed for ${job.id}:`, error)
         return "failed"
@@ -206,6 +253,112 @@ export default Plugin.define({
       }, Math.min(delay, MAX_TIMER - 1))
       timers.set(job.id, timer)
     }
+
+    // The model sees only its own delayed messages. User-scheduled messages and
+    // their ids never reach this tool.
+    await ctx.tool.transform((editor) => {
+      editor.add({
+        name: "delayed",
+        description: [
+          "Schedule a message that this session delivers to itself later.",
+          "Use it to check back on long-running work, wait for a deploy, or resume a task after a pause.",
+          "When the time comes the message wakes this session as a synthetic note, not as a message from the user, and the user sees that the agent scheduled it.",
+          "Write text so it makes sense on its own: by the time it arrives the conversation may have been compacted.",
+          "Actions: schedule (time + text), list (only messages you scheduled in this session), cancel (id).",
+          "Messages scheduled by the user are not visible to you.",
+        ].join(" "),
+        input: {
+          type: "object",
+          properties: {
+            action: {
+              type: "string",
+              enum: ["schedule", "list", "cancel"],
+              description: "schedule creates a message; list shows yours; cancel removes one by id.",
+            },
+            time: {
+              type: "string",
+              description:
+                "When to deliver: 10m, 2h, 1d, HH:MM, or YYYY-MM-DDTHH:MM (local time). Required for schedule.",
+            },
+            text: {
+              type: "string",
+              description:
+                "The message to deliver later. Required for schedule. Make it self-contained: the conversation may have been compacted by then.",
+            },
+            id: {
+              type: "string",
+              description: "Id returned by schedule. Required for cancel.",
+            },
+          },
+          required: ["action"],
+          additionalProperties: false,
+        } as const,
+        execute: async (input, context) => {
+          const { action, time, text, id } = input as {
+            action?: string
+            time?: string
+            text?: string
+            id?: string
+          }
+
+          if (action === "schedule") {
+            const message = text?.trim()
+            if (!message) return { content: "Error: text is required for schedule." }
+            if (!time) return { content: "Error: time is required for schedule." }
+            const at = resolveTime(time, Date.now())
+            if (typeof at === "string") return { content: `Error: ${at}.` }
+
+            const job: Job = {
+              id: crypto.randomUUID(),
+              sessionID: context.sessionID,
+              message,
+              fireAt: at,
+              directory: ctx.location.directory,
+              origin: "agent",
+            }
+            await ctx.storage.set(key(job.id), job)
+            arm(job)
+            await rpc.events.emit("scheduled", {
+              sessionID: job.sessionID,
+              id: job.id,
+              fireAt: job.fireAt,
+              preview: previewOf(job.message),
+              text: job.message,
+              directory: job.directory,
+              origin: job.origin,
+            }).catch(() => {})
+            return { content: `Scheduled ${job.id} for ${stamp(job.fireAt)} (in ${until(job.fireAt)}).` }
+          }
+
+          if (action === "list") {
+            const jobs = (await listJobs(context.sessionID))
+              .filter((job) => originOf(job) === "agent")
+              .sort((a, b) => a.fireAt - b.fireAt)
+            if (jobs.length === 0) return { content: "No delayed messages scheduled by you in this session." }
+            return {
+              content: [
+                `You have ${jobs.length} delayed message${jobs.length === 1 ? "" : "s"} in this session:`,
+                ...jobs.map(
+                  (job) => `- ${job.id} — ${stamp(job.fireAt)} (in ${until(job.fireAt)}): ${previewOf(job.message)}`,
+                ),
+              ].join("\n"),
+            }
+          }
+
+          if (action === "cancel") {
+            if (!id) return { content: "Error: id is required for cancel." }
+            const stored = (await ctx.storage.get(key(id))) as Job | undefined
+            if (!stored || stored.sessionID !== context.sessionID || originOf(stored) !== "agent")
+              return { content: `Error: no delayed message scheduled by you with id ${id} in this session.` }
+            const job = await withdraw(context.sessionID, id)
+            if (!job) return { content: `Error: message ${id} is no longer pending.` }
+            return { content: `Cancelled ${id}.` }
+          }
+
+          return { content: "Error: action must be schedule, list, or cancel." }
+        },
+      })
+    })
 
     // A command error returns to the client that ran it: the composer shows a
     // toast and restores the text, so a bad schedule never enters the session.
@@ -242,6 +395,7 @@ export default Plugin.define({
             message,
             fireAt: at,
             directory: ctx.location.directory,
+            origin: "user",
           }
           await ctx.storage.set(key(job.id), job)
           arm(job)
@@ -252,6 +406,7 @@ export default Plugin.define({
             preview: previewOf(message),
             text: message,
             directory: job.directory,
+            origin: job.origin,
           }).catch(() => {})
         },
       })

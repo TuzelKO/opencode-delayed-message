@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { ComposerPill, createKeyed, Plugin, Style } from "@opencode/plugin/gui"
 import { Delayed } from "./rpc"
 
-type Job = { id: string; fireAt: number; preview: string }
+type Job = { id: string; fireAt: number; preview: string; origin?: "user" | "agent" }
 
 const MaxTimer = 2 ** 31 - 1
 
@@ -25,6 +25,7 @@ const css = `
 .dm-row { position: relative; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 12px; border-radius: 4px; font-size: 13px; font-weight: 440; line-height: var(--line-height-compact); letter-spacing: -.04px; }
 .dm-row:hover { background: var(--v2-overlay-simple-overlay-hover); }
 .dm-time { flex: none; font-weight: 530; font-variant-numeric: tabular-nums; }
+.dm-agent { flex: none; color: var(--v2-text-text-muted); font-size: 11px; opacity: .8; }
 .dm-text { flex: 1 1 auto; min-width: 0; color: var(--v2-text-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dm-left { flex: none; min-width: 52px; text-align: right; color: var(--v2-text-text-muted); font-size: 11px; font-weight: 440; letter-spacing: .05px; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity .12s ease; }
 .dm-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
@@ -46,6 +47,7 @@ export default Plugin.define({
       "row.sent": "Sent",
       "row.sendBusy": "Already delivering",
       "row.sendFailed": "Could not send",
+      "row.agent": "Scheduled by agent",
       "left.now": "now",
       "left.days": "{{days}}d {{hours}}h",
       "left.hours": "{{hours}}h {{minutes}}m",
@@ -61,6 +63,7 @@ export default Plugin.define({
       "row.sent": "Отправлено",
       "row.sendBusy": "Уже отправляется",
       "row.sendFailed": "Не удалось отправить",
+      "row.agent": "Запланировано агентом",
       "left.now": "сейчас",
       "left.days": "{{days}} д {{hours}} ч",
       "left.hours": "{{hours}} ч {{minutes}} мин",
@@ -76,6 +79,7 @@ export default Plugin.define({
       "row.sent": "Gesendet",
       "row.sendBusy": "Wird bereits gesendet",
       "row.sendFailed": "Senden fehlgeschlagen",
+      "row.agent": "Vom Agenten geplant",
       "left.now": "jetzt",
       "left.days": "{{days}} T {{hours}} Std.",
       "left.hours": "{{hours}} Std. {{minutes}} Min.",
@@ -91,6 +95,7 @@ export default Plugin.define({
       "row.sent": "Envoyé",
       "row.sendBusy": "Envoi déjà en cours",
       "row.sendFailed": "Échec de l'envoi",
+      "row.agent": "Programmé par l'agent",
       "left.now": "maintenant",
       "left.days": "{{days}} j {{hours}} h",
       "left.hours": "{{hours}} h {{minutes}} min",
@@ -106,6 +111,7 @@ export default Plugin.define({
       "row.sent": "已发送",
       "row.sendBusy": "正在发送",
       "row.sendFailed": "发送失败",
+      "row.agent": "由代理安排",
       "left.now": "现在",
       "left.days": "{{days}} 天 {{hours}} 小时",
       "left.hours": "{{hours}} 小时 {{minutes}} 分钟",
@@ -160,6 +166,7 @@ export default Plugin.define({
         id: event.data.id,
         fireAt: event.data.fireAt,
         preview: event.data.preview,
+        origin: event.data.origin,
       })
     })
     rpc.events.on("fired", (event) => {
@@ -224,6 +231,11 @@ export default Plugin.define({
             {(job) => (
               <div class="dm-row">
                 <span class="dm-time">{when(job.fireAt)}</span>
+                {job.origin === "agent" ? (
+                  <span class="dm-agent" title={ctx.t("row.agent")} aria-label={ctx.t("row.agent")}>
+                    ✦
+                  </span>
+                ) : null}
                 <span class="dm-text">{job.preview}</span>
                 <span class="dm-left">{left(job.fireAt)}</span>
                 <span class="dm-actions">

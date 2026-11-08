@@ -27,7 +27,9 @@ the text into the conversation early.
 - 🔒 **Private until delivery** — the text lives in plugin storage, not in the prompt.
 - 💾 **Durable** — jobs survive a service restart; timers re-arm from storage.
 - 🪟 **Pills above the composer** — in the desktop app and the terminal UI; click for the
-  times, previews, edit, reschedule and cancel.
+  times, previews, edit, reschedule, send now and cancel.
+- 🤖 **Agent check-backs** — the model can schedule a message for itself; the pill marks it
+  with `✦`, and it arrives as a synthetic note, not as a message from you.
 - ⏱️ **On time in the desktop app** — the app's main process keeps the clock, so an idle
   window or an evicted location does not delay delivery.
 - 🤫 **Zero model turns on schedule** — a successful schedule adds nothing to the
@@ -75,6 +77,9 @@ cannot read it at scheduling time.
 At the scheduled moment the plugin calls `session.prompt` with the stored text, and it
 arrives as a normal user message.
 
+The `delayed` tool is separate: it lists only the messages the agent scheduled itself. A
+user-scheduled message is never returned to the model by the tool.
+
 The honest caveat: the text is stored on disk in OpenCode's database. The model does not get
 it through the prompt, but an agent with shell access to the machine could read the storage.
 Treat this as a prompt-level guarantee, not encryption.
@@ -88,15 +93,16 @@ Above the composer, while a message is pending:
 ```
 
 The label carries the pending count, like the subagent pill; the list behind it
-carries the times. Click it for one line per message with the scheduled time, a
-preview, and the countdown, like the app's own subagent list. In the desktop app,
+carries the times. Agent-scheduled messages carry a `✦` before the preview. Click it for
+one line per message with the scheduled time, a preview, and the countdown, like the app's
+own subagent list. In the desktop app,
 `»` sends the message now, `✎` edits it, and `×` cancels it when you hover a row. Edit
 cancels the pending job and puts the whole command back into the composer — `/delayed`,
 the scheduled time, and the full text — with the cursor in the prompt. Adjust anything
 and submit to reschedule.
 
 In the terminal UI the same pill opens a list: `Enter` edits the message in place,
-`ctrl+t` changes the time, `ctrl+d` sends it now, `ctrl+x` cancels. Editing and
+`ctrl+t` changes the time, `ctrl+e` sends it now, `ctrl+x` cancels. Editing and
 rescheduling go through the plugin's `update` RPC, so the job keeps its id and its timer
 is re-armed without a new command. There is no command to remember; the pill is the
 entry point.
@@ -111,6 +117,27 @@ The desktop pill follows the app language: English, Russian, German, French, and
 are included. The terminal commands are English. Command errors are English. Notices
 written by earlier versions are dropped from model requests, so an old error in a
 session's history cannot wake the session again.
+
+## 🤖 Agent scheduling
+
+The plugin also registers a `delayed` tool, so the agent can schedule a message for
+itself without asking you to retype the time:
+
+- `schedule` — takes `time` and `text`; returns the job id and the absolute time.
+- `list` — shows only the messages the agent scheduled in this session.
+- `cancel` — removes one of the agent's own messages by id.
+
+The tool's description tells the model to write a self-contained message: by the time it
+arrives, the conversation may have been compacted, so "check that" with no context is not
+useful.
+
+Agent-scheduled messages carry `✦` before the preview in the pill. When one becomes due,
+it arrives as a synthetic note with a visible `Scheduled by agent — …` description, not as
+a message from you; the session wakes and sees the note, and you can see why it woke. You
+can still edit, reschedule, send now, or cancel an agent-scheduled message from the pill.
+
+The tool sees only agent-scheduled messages. A user-scheduled `/delayed` message never
+appears in `list`, and its id cannot be cancelled through the tool.
 
 ## 💾 Durability
 
@@ -130,9 +157,14 @@ waits for the next time that directory loads.
 - `ctx.command.transform` registers `/delayed`; the executor gets the raw text
   outside the prompt.
 - The job goes to `ctx.storage` (`pending/<uuid>`) and a `setTimeout` chain, split at the
-  24.8-day timer cap.
-- On fire: `ctx.session.prompt({ sessionID, text })` — a real user prompt, so the session
-  wakes.
+  24.8-day timer cap. Each job records `origin: "user" | "agent"`; jobs stored by older
+  versions without the field count as user jobs.
+- On fire, a user job calls `ctx.session.prompt({ sessionID, text })` — a real user prompt,
+  so the session wakes. An agent job calls `ctx.session.synthetic` with the text, a
+  `Scheduled by agent — …` description, and metadata; it wakes the session without looking
+  like a message from the user.
+- The `delayed` tool scans the same storage but returns only agent jobs of the calling
+  session; `list` and `cancel` enforce that filter.
 - Hooks on `context`, `compaction`, `generate`, and `title` drop notices written by
   earlier versions from every model request.
 - The desktop and TUI parts talk to the server through an RPC: `pending`, `cancel`,
