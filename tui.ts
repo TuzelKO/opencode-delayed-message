@@ -200,7 +200,7 @@ export default {
       const selected = await context.ui.dialog.select<Pending>({
         title: "Delayed messages",
         options: list.map((job) => ({
-          title: job.origin === "agent" ? `✦ ${job.preview}` : job.preview,
+          title: `${job.origin === "agent" ? "✦" : "•"} ${job.preview}`,
           description: `${when(job.fireAt)} · ${left(job.fireAt)}`,
           value: job,
         })),

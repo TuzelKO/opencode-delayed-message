@@ -93,9 +93,9 @@ Above the composer, while a message is pending:
 ```
 
 The label carries the pending count, like the subagent pill; the list behind it
-carries the times. Agent-scheduled messages carry a `✦` before the preview. Click it for
-one line per message with the scheduled time, a preview, and the countdown, like the app's
-own subagent list. In the desktop app,
+carries the times. Every row starts with a marker: `•` for your messages and `✦` for
+messages the agent scheduled. Click it for one line per message with the scheduled time, a
+preview, and the countdown, like the app's own subagent list. In the desktop app,
 `»` sends the message now, `✎` edits it, and `×` cancels it when you hover a row. Edit
 cancels the pending job and puts the whole command back into the composer — `/delayed`,
 the scheduled time, and the full text — with the cursor in the prompt. Adjust anything
