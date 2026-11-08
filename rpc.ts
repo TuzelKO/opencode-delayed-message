@@ -73,31 +73,9 @@ export const Delayed = {
         additionalProperties: false,
       },
     },
-    // Cancels the job and hands its full text back so the pill can put the
-    // command into the composer for editing.
-    edit: {
-      input: {
-        type: "object",
-        properties: {
-          sessionID: { type: "string" },
-          id: { type: "string" },
-        },
-        required: ["sessionID", "id"],
-        additionalProperties: false,
-      },
-      output: {
-        type: "object",
-        properties: {
-          ok: { type: "boolean" },
-          text: { type: "string" },
-          fireAt: { type: "number" },
-        },
-        required: ["ok"],
-        additionalProperties: false,
-      },
-    },
-    // Changes the text and/or time of a pending job in place. The TUI edits
-    // through this; the job id and its timer stay the same.
+    // Changes the text and/or time of a pending job in place. The TUI and
+    // desktop edit through this; the job id, its timer, and its origin stay the
+    // same.
     update: {
       input: {
         type: "object",

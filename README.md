@@ -96,12 +96,10 @@ The label carries the pending count, like the subagent pill; the list behind it
 carries the times. Every row starts with a marker: `•` for your messages and `✦` for
 messages the agent scheduled. Click it for one line per message with the scheduled time, a
 preview, and the countdown, like the app's own subagent list. In the desktop app,
-`»` sends the message now, `✎` edits it, and `×` cancels it when you hover a row. Edit
-cancels the pending job and puts the whole command back into the composer — `/delayed`,
-the scheduled time, and the full text — with the cursor in the prompt. Adjust anything
-and submit to reschedule. Agent-scheduled rows have no `✎`: the desktop edit path
-re-creates the message through `/delayed`, which would silently make it yours, so those
-rows offer only send now and cancel.
+`»` sends the message now, `✎` edits the text, `↻` changes the time, and `×` cancels it
+when you hover a row. Editing and rescheduling go through the plugin's `update` RPC, so
+the job keeps its id, its timer is re-armed, and its origin stays the same — an
+agent-scheduled message does not silently become yours.
 
 In the terminal UI the same pill opens a list: `Enter` edits the message in place,
 `ctrl+t` changes the time, `ctrl+e` sends it now, `ctrl+x` cancels. Editing and
@@ -170,7 +168,7 @@ waits for the next time that directory loads.
 - Hooks on `context`, `compaction`, `generate`, and `title` drop notices written by
   earlier versions from every model request.
 - The desktop and TUI parts talk to the server through an RPC: `pending`, `cancel`,
-  `edit`, `update`, `deliver`, and the events `scheduled`, `fired`, `cancelled`.
+  `update`, `deliver`, and the events `scheduled`, `fired`, `cancelled`.
 - The TUI pill renders in `session.composer.top`, follows the same events, and opens a
   `dialog.select`; `update` changes the text or time in place and re-arms the timer.
 - The GUI main process mirrors `scheduled` jobs into its own storage and arms Node timers.

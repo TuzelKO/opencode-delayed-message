@@ -137,12 +137,6 @@ export default Plugin.define({
         const { sessionID, id } = input as { sessionID: string; id: string }
         return { ok: (await withdraw(sessionID, id)) !== undefined }
       },
-      edit: async (input) => {
-        const { sessionID, id } = input as { sessionID: string; id: string }
-        const job = await withdraw(sessionID, id)
-        if (!job) return { ok: false }
-        return { ok: true, text: job.message, fireAt: job.fireAt }
-      },
       update: async (input) => {
         const { sessionID, id, text, time } = input as {
           sessionID: string

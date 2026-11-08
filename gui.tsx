@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { ComposerPill, createKeyed, Plugin, Style } from "@opencode/plugin/gui"
 import { Delayed } from "./rpc"
 
-type Job = { id: string; fireAt: number; preview: string; origin?: "user" | "agent" }
+type Job = { id: string; fireAt: number; preview: string; text: string; origin?: "user" | "agent" }
 
 const MaxTimer = 2 ** 31 - 1
 
@@ -43,6 +43,12 @@ export default Plugin.define({
       "menu.title": "Scheduled messages",
       "row.cancel": "Cancel",
       "row.edit": "Edit",
+      "row.editMessage": "Edit message",
+      "row.reschedule": "Reschedule",
+      "row.save": "Save",
+      "row.updated": "Updated",
+      "row.updateFailed": "Could not update",
+      "row.timeHint": "HH:MM, YYYY-MM-DDTHH:MM, or 30m / 2h / 1d",
       "row.send": "Send now",
       "row.sent": "Sent",
       "row.sendBusy": "Already delivering",
@@ -60,6 +66,12 @@ export default Plugin.define({
       "menu.title": "Отложенные сообщения",
       "row.cancel": "Отменить",
       "row.edit": "Изменить",
+      "row.editMessage": "Изменить сообщение",
+      "row.reschedule": "Перенести",
+      "row.save": "Сохранить",
+      "row.updated": "Обновлено",
+      "row.updateFailed": "Не удалось обновить",
+      "row.timeHint": "HH:MM, YYYY-MM-DDTHH:MM или 30m / 2h / 1d",
       "row.send": "Отправить сейчас",
       "row.sent": "Отправлено",
       "row.sendBusy": "Уже отправляется",
@@ -77,6 +89,12 @@ export default Plugin.define({
       "menu.title": "Geplante Nachrichten",
       "row.cancel": "Abbrechen",
       "row.edit": "Bearbeiten",
+      "row.editMessage": "Nachricht bearbeiten",
+      "row.reschedule": "Verschieben",
+      "row.save": "Speichern",
+      "row.updated": "Aktualisiert",
+      "row.updateFailed": "Aktualisieren fehlgeschlagen",
+      "row.timeHint": "HH:MM, YYYY-MM-DDTHH:MM oder 30m / 2h / 1d",
       "row.send": "Jetzt senden",
       "row.sent": "Gesendet",
       "row.sendBusy": "Wird bereits gesendet",
@@ -94,6 +112,12 @@ export default Plugin.define({
       "menu.title": "Messages programmés",
       "row.cancel": "Annuler",
       "row.edit": "Modifier",
+      "row.editMessage": "Modifier le message",
+      "row.reschedule": "Reporter",
+      "row.save": "Enregistrer",
+      "row.updated": "Mis à jour",
+      "row.updateFailed": "Échec de la mise à jour",
+      "row.timeHint": "HH:MM, YYYY-MM-DDTHH:MM ou 30m / 2h / 1d",
       "row.send": "Envoyer maintenant",
       "row.sent": "Envoyé",
       "row.sendBusy": "Envoi déjà en cours",
@@ -111,6 +135,12 @@ export default Plugin.define({
       "menu.title": "已安排的消息",
       "row.cancel": "取消",
       "row.edit": "编辑",
+      "row.editMessage": "编辑消息",
+      "row.reschedule": "重新安排",
+      "row.save": "保存",
+      "row.updated": "已更新",
+      "row.updateFailed": "更新失败",
+      "row.timeHint": "HH:MM、YYYY-MM-DDTHH:MM 或 30m / 2h / 1d",
       "row.send": "立即发送",
       "row.sent": "已发送",
       "row.sendBusy": "正在发送",
@@ -171,6 +201,7 @@ export default Plugin.define({
         id: event.data.id,
         fireAt: event.data.fireAt,
         preview: event.data.preview,
+        text: event.data.text,
         origin: event.data.origin,
       })
     })
@@ -204,6 +235,55 @@ export default Plugin.define({
       } catch {
         ctx.toast.show({ title: ctx.t("row.sendFailed"), variant: "error" })
       }
+    }
+
+    const apply = async (sessionID: string, id: string, patch: { text?: string; time?: string }) => {
+      try {
+        const { ok, error } = await rpc.update({ sessionID, id, ...patch })
+        if (!ok) {
+          ctx.toast.show({
+            title: ctx.t("row.updateFailed"),
+            description: error,
+            variant: "error",
+          })
+          return
+        }
+        ctx.toast.show({ title: ctx.t("row.updated"), variant: "success" })
+      } catch {
+        ctx.toast.show({ title: ctx.t("row.updateFailed"), variant: "error" })
+      }
+    }
+
+    const editText = async (sessionID: string, job: Job) => {
+      let text: string | undefined
+      try {
+        text = await ctx.dialogs.prompt({
+          title: ctx.t("row.editMessage"),
+          value: job.text,
+          submit: ctx.t("row.save"),
+        })
+      } catch {
+        return
+      }
+      if (text === undefined || text === job.text) return
+      await apply(sessionID, job.id, { text })
+    }
+
+    const reschedule = async (sessionID: string, job: Job) => {
+      const current = draftTime(job.fireAt)
+      let time: string | undefined
+      try {
+        time = await ctx.dialogs.prompt({
+          title: ctx.t("row.reschedule"),
+          description: ctx.t("row.timeHint"),
+          value: current,
+          submit: ctx.t("row.save"),
+        })
+      } catch {
+        return
+      }
+      if (time === undefined || time === current) return
+      await apply(sessionID, job.id, { time })
     }
 
     createKeyed(
@@ -254,27 +334,22 @@ export default Plugin.define({
                   >
                     »
                   </button>
-                  {job.origin === "agent" ? null : (
-                    <button
-                      class="dm-action"
-                      title={ctx.t("row.edit")}
-                      aria-label={ctx.t("row.edit")}
-                      onClick={() => {
-                        void rpc
-                          .edit({ sessionID: props.session.id, id: job.id })
-                          .then(({ ok, text, fireAt }) => {
-                            if (!ok || text === undefined || fireAt === undefined) return
-                            drop(props.session.id, job.id)
-                            props.screen.composer.setText(`/delayed ${draftTime(fireAt)} ${text}`)
-                            props.close()
-                            props.screen.composer.focus()
-                          })
-                          .catch(() => {})
-                      }}
-                    >
-                      ✎
-                    </button>
-                  )}
+                  <button
+                    class="dm-action"
+                    title={ctx.t("row.edit")}
+                    aria-label={ctx.t("row.edit")}
+                    onClick={() => void editText(props.session.id, job)}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    class="dm-action"
+                    title={ctx.t("row.reschedule")}
+                    aria-label={ctx.t("row.reschedule")}
+                    onClick={() => void reschedule(props.session.id, job)}
+                  >
+                    ↻
+                  </button>
                   <button
                     class="dm-action"
                     title={ctx.t("row.cancel")}
