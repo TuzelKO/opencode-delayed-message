@@ -29,6 +29,10 @@ const claimed = new Set<string>()
 // Guards concurrent deliveries of one job while the prompt is in flight.
 const delivering = new Set<string>()
 
+// A session created just to run a command already holds these rows; they do
+// not mean the session has started.
+const SELECTION_MESSAGE = new Set(["agent-switched", "model-switched", "location-switched"])
+
 type Delivery = "delivered" | "busy" | "failed"
 
 const key = (id: string) => `pending/${id}`
@@ -382,6 +386,12 @@ export default Plugin.define({
           const now = Date.now()
           const at = resolveTime(time, now)
           if (typeof at === "string") throw new Error(`Delayed message not scheduled: ${at}.`)
+
+          const messages = await ctx.session.context({ sessionID })
+          if (!messages.some((message) => !SELECTION_MESSAGE.has(message.type)))
+            throw new Error(
+              "Delayed message not scheduled: this session has not started yet. Send a message first, then use /delayed.",
+            )
 
           const job: Job = {
             id: crypto.randomUUID(),
