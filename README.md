@@ -119,7 +119,7 @@ message.
 
 The desktop pill follows the app language: English, Russian, German, French, and Chinese
 are included. The terminal commands are English. Command errors are English. Notices
-written by earlier versions are dropped from model requests, so an old error in a
+written by version 0.1.11 are dropped from model requests, so an old error in a
 session's history cannot wake the session again.
 
 ## 🤖 Agent scheduling

@@ -19,6 +19,7 @@ type Job = {
 }
 
 const MAX_TIMER = 2 ** 31 - 1
+const MAX_DATE = 8_640_000_000_000_000
 const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
 
 // Jobs stored before the origin field existed belong to the user.
@@ -39,7 +40,12 @@ const key = (id: string) => `pending/${id}`
 
 const resolveTime = (raw: string, now: number): number | string => {
   const relative = /^\+?(\d+)([smhd])$/.exec(raw)
-  if (relative) return now + Number(relative[1]) * UNIT_MS[relative[2]]
+  if (relative) {
+    const at = now + Number(relative[1]) * UNIT_MS[relative[2]]
+    if (!Number.isFinite(at) || Math.abs(at) > MAX_DATE) return `time is too far in the future: ${raw}`
+    if (at <= now) return `time is in the past: ${raw}`
+    return at
+  }
 
   const clock = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(raw)
   if (clock) {
@@ -56,6 +62,7 @@ const resolveTime = (raw: string, now: number): number | string => {
   const at = Date.parse(raw)
   if (Number.isNaN(at)) return `cannot parse time: ${raw}`
   if (at <= now) return `time is in the past: ${raw}`
+  if (!Number.isFinite(at) || Math.abs(at) > MAX_DATE) return `time is too far in the future: ${raw}`
   return at
 }
 
@@ -81,23 +88,27 @@ const until = (at: number) => {
   return `${minutes}m`
 }
 
-// Older versions wrote notices into the transcript. Drop them from every model
-// request: the sentinel covers 0.1.11, and the legacy text patterns cover the
-// pre-fix notes that carried their text without a marker.
-const NOTICE = "\u200b[delayed-message]"
-const LEGACY_NOTICE =
-  /^(?:Usage: \/delayed <time> <message>\nTime: |Delayed message (?:not scheduled: |failed: |scheduled for \d{4}-\d{2}-\d{2} ))/
-const isNotice = (message: { role: string; content: ReadonlyArray<{ type: string; text?: string | null }> }) =>
-  message.role === "user" &&
-  message.content.some(
-    (part) =>
-      part.type === "text" &&
-      (part.text?.startsWith(NOTICE) === true || (part.text !== undefined && part.text !== null && LEGACY_NOTICE.test(part.text))),
-  )
+// Older versions wrote notices into the transcript. Identify them by the
+// metadata the plugin itself wrote, never by message text: a user may schedule
+// a message that starts with the old notice wording, and that must reach the
+// model. The 0.1.11 notice carried `source`; deliveries carry the
+// "delayed-message" key, so this marker cannot match one.
+type RequestMessage = {
+  role: string
+  metadata?: Record<string, unknown>
+  content: ReadonlyArray<{ type: string; text?: string | null }>
+}
 
-const dropNotices = (
-  event: { messages: Array<{ role: string; content: ReadonlyArray<{ type: string; text?: string | null }> }> },
-) => {
+const NOTICE = "\u200b[delayed-message]"
+const NOTICE_SOURCE = "delayed-message"
+// Metadata may not survive into every request, so the exact sentinel stays as
+// a fallback: 0.1.11 wrote nothing else, so no real user text can match it.
+const isNotice = (message: RequestMessage) =>
+  message.role === "user" &&
+  (message.metadata?.source === NOTICE_SOURCE ||
+    message.content.some((part) => part.type === "text" && part.text === NOTICE))
+
+const dropNotices = (event: { messages: Array<RequestMessage> }) => {
   for (let index = event.messages.length - 1; index >= 0; index--) {
     const message = event.messages[index]
     if (message && isNotice(message)) event.messages.splice(index, 1)

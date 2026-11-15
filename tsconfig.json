@@ -3,6 +3,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true
@@ -11,6 +13,7 @@
     "index.ts",
     "rpc.ts",
     "tui.ts",
+    "gui.tsx",
     "virtual.d.ts"
   ]
 }

@@ -53,6 +53,7 @@ export default Plugin.define({
       "row.sent": "Sent",
       "row.sendBusy": "Already delivering",
       "row.sendFailed": "Could not send",
+      "row.cancelFailed": "Could not cancel",
       "row.agent": "Scheduled by agent",
       "row.user": "Scheduled by you",
       "left.now": "now",
@@ -76,6 +77,7 @@ export default Plugin.define({
       "row.sent": "Отправлено",
       "row.sendBusy": "Уже отправляется",
       "row.sendFailed": "Не удалось отправить",
+      "row.cancelFailed": "Не удалось отменить",
       "row.agent": "Запланировано агентом",
       "row.user": "Запланировано вами",
       "left.now": "сейчас",
@@ -99,6 +101,7 @@ export default Plugin.define({
       "row.sent": "Gesendet",
       "row.sendBusy": "Wird bereits gesendet",
       "row.sendFailed": "Senden fehlgeschlagen",
+      "row.cancelFailed": "Abbrechen fehlgeschlagen",
       "row.agent": "Vom Agenten geplant",
       "row.user": "Von Ihnen geplant",
       "left.now": "jetzt",
@@ -122,6 +125,7 @@ export default Plugin.define({
       "row.sent": "Envoyé",
       "row.sendBusy": "Envoi déjà en cours",
       "row.sendFailed": "Échec de l'envoi",
+      "row.cancelFailed": "Échec de l'annulation",
       "row.agent": "Programmé par l'agent",
       "row.user": "Programmé par vous",
       "left.now": "maintenant",
@@ -145,6 +149,7 @@ export default Plugin.define({
       "row.sent": "已发送",
       "row.sendBusy": "正在发送",
       "row.sendFailed": "发送失败",
+      "row.cancelFailed": "取消失败",
       "row.agent": "由代理安排",
       "row.user": "由你安排",
       "left.now": "现在",
@@ -197,31 +202,41 @@ export default Plugin.define({
     const rpc = ctx.client.rpc(Delayed)
 
     rpc.events.on("scheduled", (event) => {
-      put(event.data.sessionID, {
-        id: event.data.id,
-        fireAt: event.data.fireAt,
-        preview: event.data.preview,
-        text: event.data.text,
-        origin: event.data.origin,
-      })
+      const { sessionID, id, fireAt, preview, text, origin } = event.data as {
+        sessionID: string
+        id: string
+        fireAt: number
+        preview: string
+        text: string
+        origin?: "user" | "agent"
+      }
+      put(sessionID, { id, fireAt, preview, text, origin })
     })
     rpc.events.on("fired", (event) => {
-      drop(event.data.sessionID, event.data.id)
+      const { sessionID, id } = event.data as { sessionID: string; id: string }
+      drop(sessionID, id)
     })
     rpc.events.on("cancelled", (event) => {
-      drop(event.data.sessionID, event.data.id)
+      const { sessionID, id } = event.data as { sessionID: string; id: string }
+      drop(sessionID, id)
     })
 
     const cancel = async (sessionID: string, id: string) => {
       try {
-        const { ok } = await rpc.cancel({ sessionID, id })
-        if (ok) drop(sessionID, id)
-      } catch {}
+        const { ok } = (await rpc.cancel({ sessionID, id })) as { ok: boolean }
+        if (!ok) {
+          ctx.toast.show({ title: ctx.t("row.cancelFailed"), variant: "error" })
+          return
+        }
+        drop(sessionID, id)
+      } catch {
+        ctx.toast.show({ title: ctx.t("row.cancelFailed"), variant: "error" })
+      }
     }
 
     const sendNow = async (sessionID: string, id: string) => {
       try {
-        const { status } = await rpc.deliver({ sessionID, id })
+        const { status } = (await rpc.deliver({ sessionID, id })) as { status: string }
         if (status === "delivered" || status === "missing") {
           drop(sessionID, id)
           ctx.toast.show({ title: ctx.t("row.sent"), variant: "success" })
@@ -239,7 +254,7 @@ export default Plugin.define({
 
     const apply = async (sessionID: string, id: string, patch: { text?: string; time?: string }) => {
       try {
-        const { ok, error } = await rpc.update({ sessionID, id, ...patch })
+        const { ok, error } = (await rpc.update({ sessionID, id, ...patch })) as { ok: boolean; error?: string }
         if (!ok) {
           ctx.toast.show({
             title: ctx.t("row.updateFailed"),
@@ -291,7 +306,10 @@ export default Plugin.define({
       (sessionID) => {
         void rpc
           .pending({ sessionID })
-          .then(({ jobs: list }) => setJobs((prev) => ({ ...prev, [sessionID]: list })))
+          .then((value) => {
+            const { jobs: list } = value as { jobs: Job[] }
+            setJobs((prev) => ({ ...prev, [sessionID]: list }))
+          })
           .catch(() => {})
       },
     )
@@ -395,6 +413,18 @@ export default Plugin.define({
       if (jobs.value.some((job) => job.id === id)) jobs.set(jobs.value.filter((job) => job.id !== id))
     }
 
+    // A permanently unreachable location must not keep a job alive forever, so
+    // every failed attempt spends the same budget and the fifth forgets the job.
+    const recordFailure = (id: string) => {
+      const count = (failures.get(id) ?? 0) + 1
+      if (count < 5) {
+        failures.set(id, count)
+        return true
+      }
+      forget(id)
+      return false
+    }
+
     const arm = (job: PendingJob) => {
       stop(job.id)
       const delay = job.fireAt - Date.now()
@@ -412,27 +442,19 @@ export default Plugin.define({
         return
       }
       try {
-        const { status } = await ctx.client.rpc(Delayed).deliver(
+        const { status } = (await ctx.client.rpc(Delayed).deliver(
           { sessionID: job.sessionID, id: job.id },
           { location: { directory: job.directory } },
-        )
+        )) as { status: string }
         if (status === "delivered" || status === "missing") {
           failures.delete(job.id)
           forget(job.id)
           return
         }
-        if (status === "failed") {
-          const count = (failures.get(job.id) ?? 0) + 1
-          if (count >= 5) {
-            failures.delete(job.id)
-            forget(job.id)
-            return
-          }
-          failures.set(job.id, count)
-        }
+        if (status === "failed" && !recordFailure(job.id)) return
         timers.set(job.id, setTimeout(() => void fire(job), status === "busy" ? 2_000 : 30_000))
       } catch {
-        timers.set(job.id, setTimeout(() => void fire(job), 15_000))
+        if (recordFailure(job.id)) timers.set(job.id, setTimeout(() => void fire(job), 15_000))
       }
     }
 
