@@ -56,12 +56,14 @@ itself works anywhere.
 ```text
 /delayed 03:00 call mom
 /delayed 2026-11-05 03:00 check the deploy
+/delayed 2026-11-05 ship the release notes
 /delayed 30m stretch
 ```
 
 | Time | Meaning |
 | --- | --- |
 | `HH:MM` / `H:MM` | the next occurrence; if it already passed today, tomorrow |
+| `YYYY-MM-DD` | local midnight of that day; today and past dates are refused |
 | `YYYY-MM-DD HH:MM` | absolute local time; a past time is refused |
 | `YYYY-MM-DDTHH:MM` | same, ISO form without the space |
 | `30s`, `30m`, `2h`, `1d` | relative to now; a leading `+` is optional |

@@ -1,4 +1,4 @@
-import { createSignal, For } from "solid-js"
+import { createSignal, For, onCleanup } from "solid-js"
 import { Schema } from "effect"
 import { ComposerPill, createKeyed, Plugin, Style } from "@opencode/plugin/gui"
 import { Delayed } from "./rpc"
@@ -201,24 +201,29 @@ export default Plugin.define({
 
     const rpc = ctx.client.rpc(Delayed)
 
-    rpc.events.on("scheduled", (event) => {
-      const { sessionID, id, fireAt, preview, text, origin } = event.data as {
-        sessionID: string
-        id: string
-        fireAt: number
-        preview: string
-        text: string
-        origin?: "user" | "agent"
-      }
-      put(sessionID, { id, fireAt, preview, text, origin })
-    })
-    rpc.events.on("fired", (event) => {
-      const { sessionID, id } = event.data as { sessionID: string; id: string }
-      drop(sessionID, id)
-    })
-    rpc.events.on("cancelled", (event) => {
-      const { sessionID, id } = event.data as { sessionID: string; id: string }
-      drop(sessionID, id)
+    const releases = [
+      rpc.events.on("scheduled", (event) => {
+        const { sessionID, id, fireAt, preview, text, origin } = event.data as {
+          sessionID: string
+          id: string
+          fireAt: number
+          preview: string
+          text: string
+          origin?: "user" | "agent"
+        }
+        put(sessionID, { id, fireAt, preview, text, origin })
+      }),
+      rpc.events.on("fired", (event) => {
+        const { sessionID, id } = event.data as { sessionID: string; id: string }
+        drop(sessionID, id)
+      }),
+      rpc.events.on("cancelled", (event) => {
+        const { sessionID, id } = event.data as { sessionID: string; id: string }
+        drop(sessionID, id)
+      }),
+    ]
+    onCleanup(() => {
+      for (const release of releases) release()
     })
 
     const cancel = async (sessionID: string, id: string) => {

@@ -30,9 +30,9 @@ const claimed = new Set<string>()
 // Guards concurrent deliveries of one job while the prompt is in flight.
 const delivering = new Set<string>()
 
-// A session created just to run a command already holds these rows; they do
-// not mean the session has started.
-const SELECTION_MESSAGE = new Set(["agent-switched", "model-switched", "location-switched"])
+// A session created just to run a command already holds selection rows and
+// idle markers; only these message types carry a conversation.
+const CONVERSATION_MESSAGE = new Set(["user", "assistant", "synthetic", "compaction"])
 
 type Delivery = "delivered" | "busy" | "failed"
 
@@ -57,6 +57,22 @@ const resolveTime = (raw: string, now: number): number | string => {
     at.setHours(hours, minutes, seconds, 0)
     if (at.getTime() <= now) at.setDate(at.getDate() + 1)
     return at.getTime()
+  }
+
+  // A bare date is local midnight, like every other documented form;
+  // Date.parse would read it as UTC.
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  if (date) {
+    const year = Number(date[1])
+    const month = Number(date[2])
+    const day = Number(date[3])
+    const local = new Date(year, month - 1, day, 0, 0, 0, 0)
+    if (local.getFullYear() !== year || local.getMonth() !== month - 1 || local.getDate() !== day)
+      return `invalid date: ${raw}`
+    const midnight = local.getTime()
+    if (midnight <= now) return `time is in the past: ${raw}`
+    if (Math.abs(midnight) > MAX_DATE) return `time is too far in the future: ${raw}`
+    return midnight
   }
 
   const at = Date.parse(raw)
@@ -287,7 +303,7 @@ export default Plugin.define({
             time: {
               type: "string",
               description:
-                "When to deliver: 10m, 2h, 1d, HH:MM, or YYYY-MM-DDTHH:MM (local time). Required for schedule.",
+                "When to deliver: 10m, 2h, 1d, HH:MM, a bare YYYY-MM-DD (local midnight), or YYYY-MM-DDTHH:MM (local time). Required for schedule.",
             },
             text: {
               type: "string",
@@ -399,7 +415,7 @@ export default Plugin.define({
           if (typeof at === "string") throw new Error(`Delayed message not scheduled: ${at}.`)
 
           const messages = await ctx.session.context({ sessionID })
-          if (!messages.some((message) => !SELECTION_MESSAGE.has(message.type)))
+          if (!messages.some((message) => CONVERSATION_MESSAGE.has(message.type)))
             throw new Error(
               "Delayed message not scheduled: this session has not started yet. Send a message first, then use /delayed.",
             )
